@@ -1,0 +1,31 @@
+#ifndef DATASET_H
+#define DATASET_H
+
+#include "frame.hpp"
+#include <string>
+#include <vector>
+
+
+struct ImageData
+{
+    double timestamp;
+    std::string filename;
+};
+
+
+class Dataset
+{
+
+public:
+    Dataset(const std::string& path);
+    void getRgbData(std::ifstream& stream, const std::string& path );
+    void getDepthData(std::ifstream& stream, const std::string& path );
+    bool next(Frame& frame);
+private:
+    std::vector<ImageData> rgb_buf_;
+    std::vector<ImageData> depth_buf_;
+
+    int current_index_ = 0; //待梳理初值
+};
+
+#endif 

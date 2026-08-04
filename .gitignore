@@ -1,0 +1,24 @@
+# build
+build/
+cmake-build-*/
+
+# vscode
+.vscode/
+
+# clion
+.idea/
+
+# binary
+*.so
+*.a
+*.o
+
+# logs
+*.log
+
+# dataset
+dataset/
+
+# ros
+install/
+log/
