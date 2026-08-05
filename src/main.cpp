@@ -1,5 +1,7 @@
 #include "dataset.hpp"
 #include "VO.hpp"
+#include "pose.hpp"
+#include "posedata.hpp"
 #include <iostream>
 #include <string>
 
@@ -23,13 +25,21 @@ int main(int argc, char** argv)
     VO vo;
 
     Frame frame;
+    Pose poseviewer;
 
     while(dataset.next(frame))
     {
         bool success = vo.processFrame(frame);
         if(success)
         {
+            PoseData pD;
             Eigen::Isometry3d pose = vo.pose();
+            pD.timestamp = frame.timestamp;
+            pD.position = pose.translation();
+            
+            poseviewer.posePath(pD);
+            poseviewer.pathShow(pD);
+            
 
             std::cout << "frame:" << frame.id << std::endl;
             std::cout << "position:" << pose.translation() << std::endl;

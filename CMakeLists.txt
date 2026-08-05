@@ -29,6 +29,7 @@ add_executable(
     src/point_cloud.cpp
     src/feature_tracker.cpp
     src/VO.cpp
+    src/pose.cpp
 )
 
 target_compile_definitions(
