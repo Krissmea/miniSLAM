@@ -1,24 +1,26 @@
 #include "dataset.hpp"
-#include "camera.hpp"
-#include "config.hpp"
-#include "point_cloud.hpp"
 #include "VO.hpp"
 #include <iostream>
+#include <string>
 
 
 
-
-
-int main()
+int main(int argc, char** argv)
 {
-    Config config;
-    config.load("/home/liuxz/workspace/CppProjects/miniSLAM/config/camera.yaml");
+    std::string config_path = MINI_SLAM_DEFAULT_CONFIG_PATH;
+    if (argc > 1)
+    {
+        config_path = argv[1];
+    }
+
+    if (!loadConfig(config_path))
+    {
+        return 1;
+    }
     
-    Dataset dataset(config.datasetPath());
+    Dataset dataset(g_dataset_path);
 
-    Camera camera(config.fx(), config.fy(), config.cx(), config.cy());
-
-    VO vo(camera, config);
+    VO vo;
 
     Frame frame;
 

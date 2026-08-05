@@ -25,11 +25,15 @@ add_executable(
 
     src/main.cpp
     src/dataset.cpp
-    src/camera.cpp
     src/config.cpp
     src/point_cloud.cpp
     src/feature_tracker.cpp
     src/VO.cpp
+)
+
+target_compile_definitions(
+    mini_slam
+    PRIVATE MINI_SLAM_DEFAULT_CONFIG_PATH="${PROJECT_SOURCE_DIR}/config/miniSLAM.yaml"
 )
 
 

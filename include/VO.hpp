@@ -2,24 +2,19 @@
 #define VO_H
 
 #include <Eigen/Geometry>
-#include "frame.hpp"
 #include "feature_tracker.hpp"
-#include "camera.hpp"
-#include "config.hpp"
 
 
 
 class VO
 {
 public:
-    VO(Camera& camera, Config& config); 
     bool processFrame(Frame& frame);
+    const Eigen::Isometry3d& pose() const;
 
 private:
     FeatureTracker tracker_;
-    Camera camera_;
     Frame frame_;
-    Config config_;
     Eigen::Isometry3d pose_;
     bool first_frame = true;
 

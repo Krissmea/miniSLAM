@@ -1,16 +1,14 @@
 #include "feature_tracker.hpp"
 
 
-FeatureTracker::FeatureTracker(
-    Camera& camera,
-    Config& config
-)
-:
-camera_(camera),
-config_(config)
-{
+// FeatureTracker::FeatureTracker(
+    
+// )
+// :
+// pointcloud_;
+// {
 
-}
+// }
 
 //光流追踪
 void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
@@ -128,7 +126,7 @@ void FeatureTracker::get3d2d(Frame& frame_last, std::vector<cv::Point3f>& pts3d_
         if (depth == 0)
             continue;
         
-        Eigen::Vector3d p = camera_.pixel2camera(u,v, depth / config_.depthScale());
+        Eigen::Vector3d p = pointcloud_.pixel2camera(u,v, depth / g_depth_scale);
 
         pts3d_last.push_back(cv::Point3f(p.x(),p.y(),p.z()));
         pts2d_curr.push_back(pts_curr_[i]);

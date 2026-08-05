@@ -4,13 +4,12 @@
 #include "frame.hpp"
 #include <opencv2/opencv.hpp>
 #include "config.hpp"
-#include "camera.hpp"
+#include "point_cloud.hpp"
 
 
 class FeatureTracker
 {
 public:
-    FeatureTracker(Camera& camera,Config& config);
 
     void detect_klt(Frame& frame_last, Frame& frame_curr);
     void get3d2d(Frame& frame_last, std::vector<cv::Point3f>& pts3d_last, std::vector<cv::Point2f>& pts2d_curr);
@@ -21,8 +20,7 @@ private:
     std::vector<cv::Point2f> pts_last_;
     std::vector<cv::Point2f> pts_curr_;
     
-    Camera& camera_;
-    Config& config_;
+    PointCloud pointcloud_;
 };
 
 

@@ -2,12 +2,17 @@
 #define POINT_CLOUD_H
 
 #include "frame.hpp"
-#include "camera.hpp"
+#include "config.hpp"
 
 class PointCloud
 {
 public:
-    void generate(Frame& frame, Camera& camera, double depth_scale);
+    // explicit PointCloud(Camera& camera);
+    void generate(Frame& frame, double depth_scale);
+    Eigen::Vector3d pixel2camera(double u, double v, double depth);
+
+private:
+    
 };
 
 

@@ -1,15 +1,6 @@
+#include <iostream>
 #include "VO.hpp"
 
-VO::VO(
-    Camera& camera,
-    Config& config
-)
-:
-camera_(camera),
-tracker_(camera, config)
-{
-
-}
 
 
 bool VO::processFrame(Frame& frame)
@@ -32,7 +23,7 @@ bool VO::processFrame(Frame& frame)
         }
 
     //pnp
-    cv::Mat K = camera_.K();
+    cv::Mat K = g_K;
     cv::Mat dist = cv::Mat::zeros(5,1,CV_64F);
     cv::Mat rvec;
     cv::Mat tvec;
@@ -40,8 +31,29 @@ bool VO::processFrame(Frame& frame)
     
     if(success)
     {
+        cv::Mat R_cv;
+        cv::Rodrigues(rvec, R_cv);
+
+        Eigen::Matrix3d R;
+        for (int row = 0; row < 3; ++row)
+        {
+            for (int col = 0; col < 3; ++col)
+            {
+                R(row, col) = R_cv.at<double>(row, col);
+            }
+        }
+
+        Eigen::Vector3d t(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
+        pose_.linear() = R.transpose();
+        pose_.translation() = -R.transpose() * t;
+
         std::cout<<"PnP success"<<std::endl;
         std::cout <<" 3D:" << pts3d_last_.size() << " 2D:" << pts2d_curr_.size() <<std::endl;
+    }
+    else
+    {
+        frame_ = frame;
+        return false;
     }
 
     //更新pose
@@ -50,4 +62,9 @@ bool VO::processFrame(Frame& frame)
     frame_ = frame;
 
     return true;
+}
+
+const Eigen::Isometry3d& VO::pose() const
+{
+    return pose_;
 }
