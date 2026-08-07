@@ -73,7 +73,7 @@ void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
 
     for (size_t i = 0; i < corners_last.size(); ++i)
     {
-        if (!status_forward[i] && !status_back[i])
+        if (status_forward[i] && status_back[i])
         {
             continue;
         }

@@ -4,7 +4,7 @@ project(mini_slam)
 
 
 # C++版本
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
@@ -17,7 +17,9 @@ include_directories(
 
 # OpenCV
 find_package(OpenCV REQUIRED)
-
+# spdlog / fmt
+find_package(spdlog REQUIRED)
+find_package(fmt REQUIRED)
 
 # 可执行文件
 add_executable(
@@ -43,4 +45,6 @@ target_link_libraries(
     mini_slam
 
     ${OpenCV_LIBS}
+    spdlog::spdlog
+    fmt::fmt
 )

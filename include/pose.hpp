@@ -17,7 +17,7 @@ public:
     Eigen::Quaterniond orientation;
 
     bool posePath(const PoseData& poseData);
-    void pathShow(const PoseData& poseData);
+    void pathShow();
 
 private:
     std::vector<Eigen::Vector3d> position_;

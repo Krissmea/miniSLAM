@@ -1,5 +1,7 @@
 #include <iostream>
 #include "VO.hpp"
+#include "krissmea_log.hpp"
+
 
 
 
@@ -18,6 +20,7 @@ bool VO::processFrame(Frame& frame)
     tracker_.get3d2d(frame_, pts3d_last_, pts2d_curr_);
     if(pts3d_last_.size()<10)
         {
+
             frame_=frame;
             return false;
         }

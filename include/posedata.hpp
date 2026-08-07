@@ -12,4 +12,4 @@ struct PoseData
     Eigen::Quaterniond orientation;
 };
 
-#endif // POSE_H
+#endif // POSE_Ha   
