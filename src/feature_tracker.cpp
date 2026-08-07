@@ -1,4 +1,6 @@
 #include "feature_tracker.hpp"
+#include <krisea_log/logger.hpp>
+
 
 
 // FeatureTracker::FeatureTracker(
@@ -18,6 +20,7 @@ void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
 
     if (frame_last.rgb.empty() || frame_curr.rgb.empty())
     {
+        KR_WARN("Empty frame images, skipping KLT tracking.");
         return;
     }
 
@@ -37,9 +40,65 @@ void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
     cv::goodFeaturesToTrack(gray_last, corners_last, 300, 0.01, 10.0, cv::Mat(), 7, false, 0.04);
     if (corners_last.size() <= 20)
     {
-        std::cerr << "Too few features: " << corners_last.size() << std::endl;
+        KR_ERROR("Too few features detected in the last frame: {}", corners_last.size());
         return;
     }
+    // // ==================== 可视化前后帧和特征点 ====================
+
+    // // 转成 BGR，方便画彩色特征点
+    // cv::Mat last_vis;
+    // cv::Mat curr_vis;
+
+    // if (gray_last.channels() == 1)
+    //     cv::cvtColor(gray_last, last_vis, cv::COLOR_GRAY2BGR);
+    // else
+    //     last_vis = gray_last.clone();
+
+    // if (gray_curr.channels() == 1)
+    //     cv::cvtColor(gray_curr, curr_vis, cv::COLOR_GRAY2BGR);
+    // else
+    //     curr_vis = gray_curr.clone();
+
+    // // 在上一帧中画出检测到的特征点
+    // for (const auto& pt : corners_last)
+    // {
+    //     cv::circle(
+    //         last_vis,
+    //         pt,
+    //         3,                       // 半径
+    //         cv::Scalar(0, 0, 255),   // 红色
+    //         -1,                      // 实心
+    //         cv::LINE_AA);
+    // }
+
+    // // 可选：显示特征点数量
+    // cv::putText(
+    //     last_vis,
+    //     "Last frame - features: " + std::to_string(corners_last.size()),
+    //     cv::Point(20, 30),
+    //     cv::FONT_HERSHEY_SIMPLEX,
+    //     0.7,
+    //     cv::Scalar(0, 255, 0),
+    //     2);
+
+    // cv::putText(
+    //     curr_vis,
+    //     "Current frame",
+    //     cv::Point(20, 30),
+    //     cv::FONT_HERSHEY_SIMPLEX,
+    //     0.7,
+    //     cv::Scalar(0, 255, 0),
+    //     2);
+
+    // // 如果两张图尺寸一致，可以直接水平拼接
+    // cv::Mat combined;
+    // cv::hconcat(last_vis, curr_vis, combined);
+
+    // cv::imshow("Last Frame | Current Frame", combined);
+
+    // // 实时程序用 1
+    // cv::waitKey(1);
+
 
     std::vector<cv::Point2f> corners_curr;
     std::vector<uchar> status_forward;
@@ -55,43 +114,174 @@ void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
         3, 
         cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01));
     
-    std::vector<cv::Point2f> corners_back;
-    std::vector<uchar> status_back;
-    std::vector<float> error_back;
+    // std::vector<cv::Point2f> corners_back;
+    // std::vector<uchar> status_back;
+    // std::vector<float> error_back;
 
-    cv::calcOpticalFlowPyrLK(gray_curr, 
-        gray_last, 
-        corners_curr, 
-        corners_back, 
-        status_back, 
-        error_back,
-        cv::Size(21, 21),
+    // cv::calcOpticalFlowPyrLK(gray_curr, 
+    //     gray_last, 
+    //     corners_curr, 
+    //     corners_back, 
+    //     status_back, 
+    //     error_back,
+    //     cv::Size(21, 21),
+    //     3,
+    //     cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01));
+
+    // ==================== 光流结果可视化 ====================
+
+    cv::Mat last_vis;
+    cv::Mat curr_vis;
+
+    if (gray_last.channels() == 1)
+        cv::cvtColor(gray_last, last_vis, cv::COLOR_GRAY2BGR);
+    else
+        last_vis = gray_last.clone();
+
+    if (gray_curr.channels() == 1)
+        cv::cvtColor(gray_curr, curr_vis, cv::COLOR_GRAY2BGR);
+    else
+        curr_vis = gray_curr.clone();
+
+    int valid_count = 0;
+
+    for (size_t i = 0; i < corners_last.size(); ++i)
+    {
+        if (!status_forward[i])
+        continue;
+
+    const cv::Point2f& pt_last = corners_last[i];
+    const cv::Point2f& pt_curr = corners_curr[i];
+
+    // 可选：过滤明显异常的光流
+    float dx = pt_curr.x - pt_last.x;
+    float dy = pt_curr.y - pt_last.y;
+    float distance = std::sqrt(dx * dx + dy * dy);
+
+    if (distance > 100.0f)
+        continue;
+
+    ++valid_count;
+
+    // 上一帧特征点：红色
+    cv::circle(
+        last_vis,
+        pt_last,
         3,
-        cv::TermCriteria(cv::TermCriteria::COUNT + cv::TermCriteria::EPS, 30, 0.01));
+        cv::Scalar(0, 0, 255),
+        -1,
+        cv::LINE_AA);
+
+    // 当前帧跟踪点：绿色
+    cv::circle(
+        curr_vis,
+        pt_curr,
+        3,
+        cv::Scalar(0, 255, 0),
+        -1,
+        cv::LINE_AA);
+    }
+
+
+    // 标题
+    cv::putText(
+        last_vis,
+        "Last frame",
+        cv::Point(20, 30),
+        cv::FONT_HERSHEY_SIMPLEX,
+        0.7,
+        cv::Scalar(0, 255, 255),
+        2);
+
+    cv::putText(
+        curr_vis,
+        "Current frame",
+        cv::Point(20, 30),
+        cv::FONT_HERSHEY_SIMPLEX,
+        0.7,
+        cv::Scalar(0, 255, 255),
+        2);
+
+
+    // 并排拼接
+    cv::Mat combined;
+    cv::hconcat(last_vis, curr_vis, combined);
+
+
+    // ==================== 在并排图上画匹配连线 ====================
+
+    const int x_offset = last_vis.cols;
+
+    for (size_t i = 0; i < corners_last.size(); ++i)
+    {
+        if (!status_forward[i])
+            continue;
+
+        const cv::Point2f& pt_last = corners_last[i];
+        const cv::Point2f& pt_curr = corners_curr[i];
+
+        float dx = pt_curr.x - pt_last.x;
+        float dy = pt_curr.y - pt_last.y;
+        float distance = std::sqrt(dx * dx + dy * dy);
+
+        if (distance > 100.0f)
+        continue;
+
+        // 当前帧在 combined 里面的坐标需要增加 x 偏移
+        cv::Point2f pt_curr_offset(
+            pt_curr.x + x_offset,
+            pt_curr.y);
+
+        // 蓝色连线表示匹配关系
+        cv::line(
+            combined,
+            pt_last,
+            pt_curr_offset,
+            cv::Scalar(255, 0, 0),
+            1,
+            cv::LINE_AA);
+    }
+
+
+    // 显示有效跟踪数量
+    cv::putText(
+        combined,
+        "Tracked: " + std::to_string(valid_count) +
+        "/" + std::to_string(corners_last.size()),
+        cv::Point(20, combined.rows - 20),
+        cv::FONT_HERSHEY_SIMPLEX,
+        0.7,
+        cv::Scalar(0, 255, 255),
+        2);
+
+    cv::imshow("Optical Flow: Last | Current", combined);
+
+    cv::waitKey(1);
 
     double total_motion = 0.0;
 
     for (size_t i = 0; i < corners_last.size(); ++i)
     {
-        if (status_forward[i] && status_back[i])
+        if (status_forward[i] )
         {
+            KR_WARN("Feature {} lost during tracking.", i);
             continue;
         }
 
         const cv::Point2f &p_last = corners_last[i];
         const cv::Point2f &p_curr = corners_curr[i];
-        const cv::Point2f &p_back = corners_back[i];
+        // const cv::Point2f &p_back = corners_back[i];
 
         if (p_curr.x < 0 || p_curr.y < 0 || p_curr.x >= gray_curr.cols || p_curr.y >= gray_curr.rows)
         {
             continue;
         }
 
-        const double fb_error = cv::norm(p_last - p_back);
-        if (fb_error > 1.0)
-        {
-            continue;
-        }
+        // const double fb_error = cv::norm(p_last - p_back);
+        // if (fb_error > 1.0)
+        // {
+        //     continue;
+        // }
 
         const double motion = cv::norm(p_last - p_curr);
         if (motion > 0.2)
@@ -106,7 +296,7 @@ void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
 
     if (!pts_last_.empty())
     {
-        std::cout << "Motion:" <<  total_motion / pts_last_.size();
+        KR_INFO("Tracked {} features from last frame to current frame.", pts_last_.size());
     }
 
 }

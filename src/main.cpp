@@ -37,7 +37,7 @@ int main(int argc, char** argv)
     while(dataset.next(frame))
     {
         bool success = vo.processFrame(frame);
-        KR_INFO("processframe:{}",success);
+        // KR_INFO("processframe:{}",success);
         if(success)
         {
             PoseData pD;

@@ -20,6 +20,7 @@ bool VO::processFrame(Frame& frame)
     if(pts3d_last_.size()<10)
         {
 
+            KR_WARN("Not enough 3D-2D correspondences: {}", pts3d_last_.size());
             frame_=frame;
             return false;
         }

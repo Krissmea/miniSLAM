@@ -9,4 +9,4 @@ camera:
 
 dataset:
   type: tum
-  path: ../dataset/tum/rgbd_dataset_freiburg1_xyz
+  path: ../../dataset/tum/rgbd_dataset_freiburg1_xyz
