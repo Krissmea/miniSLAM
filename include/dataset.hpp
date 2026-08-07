@@ -1,7 +1,8 @@
 #ifndef DATASET_H
 #define DATASET_H
 
-#include "frame.hpp"
+#include <common/frame.hpp>
+#include <common/posedata.hpp>
 #include <string>
 #include <vector>
 

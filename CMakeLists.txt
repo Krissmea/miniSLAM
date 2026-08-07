@@ -17,9 +17,7 @@ include_directories(
 
 # OpenCV
 find_package(OpenCV REQUIRED)
-# spdlog / fmt
-find_package(spdlog REQUIRED)
-find_package(fmt REQUIRED)
+
 
 # 可执行文件
 add_executable(
@@ -34,17 +32,57 @@ add_executable(
     src/pose.cpp
 )
 
+# =========================
+# C++ standard
+# =========================
+
+target_compile_features(
+    mini_slam
+    PRIVATE
+        cxx_std_20
+)
+
+
+# =========================
+# miniSLAM headers
+# =========================
+
+target_include_directories(
+    mini_slam
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OpenCV_INCLUDE_DIRS}
+)
+
+# =========================
+# config
+# =========================
+
 target_compile_definitions(
     mini_slam
     PRIVATE MINI_SLAM_DEFAULT_CONFIG_PATH="${PROJECT_SOURCE_DIR}/config/miniSLAM.yaml"
 )
 
-
+# =========================
+# libraries
+# =========================
 # 链接库
+
 target_link_libraries(
     mini_slam
 
-    ${OpenCV_LIBS}
-    spdlog::spdlog
-    fmt::fmt
+    PRIVATE
+        krisea::common
+        krisea::log
+        ${OpenCV_LIBS}
+)
+
+# =========================
+# output
+# =========================
+
+set_target_properties(
+    mini_slam
+    PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )

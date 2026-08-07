@@ -1,11 +1,10 @@
 #include "dataset.hpp"
 #include "VO.hpp"
 #include "pose.hpp"
-#include "posedata.hpp"
+#include <common/posedata.hpp>
 #include <iostream>
 #include <string>
-#include "krissmea_log.hpp"
-
+#include <krisea_log/logger.hpp>
 
 
 int main(int argc, char** argv)

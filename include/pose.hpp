@@ -3,8 +3,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include "posedata.hpp"
-
+#include <common/posedata.hpp>
 class Pose
 {
 public:

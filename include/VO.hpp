@@ -2,6 +2,7 @@
 #define VO_H
 
 #include <Eigen/Geometry>
+#include <common/frame.hpp>
 #include "feature_tracker.hpp"
 
 

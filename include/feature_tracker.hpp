@@ -1,7 +1,7 @@
 #ifndef FEATURE_TRACKER_H
 #define FEATURE_TRACKER_H
 
-#include "frame.hpp"
+#include <common/frame.hpp>
 #include <opencv2/opencv.hpp>
 #include "config.hpp"
 #include "point_cloud.hpp"

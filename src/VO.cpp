@@ -1,7 +1,6 @@
 #include <iostream>
 #include "VO.hpp"
-#include "krissmea_log.hpp"
-
+#include <krisea_log/logger.hpp>
 
 
 

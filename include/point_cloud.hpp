@@ -1,7 +1,7 @@
 #ifndef POINT_CLOUD_H
 #define POINT_CLOUD_H
 
-#include "frame.hpp"
+#include <common/frame.hpp>
 #include "config.hpp"
 
 class PointCloud
