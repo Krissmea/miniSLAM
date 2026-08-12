@@ -15,11 +15,9 @@ namespace mini_slam::converter
 {
 
 // ROS -> project-owned data types.
-std::optional<ImageData> fromRosImage(
-    const sensor_msgs::msg::Image& message);
+std::optional<ImageData> fromRosImage(const sensor_msgs::msg::Image& message);
 
-std::optional<DepthImageData> fromRosDepth(
-    const sensor_msgs::msg::Image& message);
+std::optional<DepthImageData> fromRosDepth(const sensor_msgs::msg::Image& message);
 
 ImuData fromRos(const sensor_msgs::msg::Imu& message);
 

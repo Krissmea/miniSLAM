@@ -22,8 +22,7 @@ namespace mini_slam
 class RosAdapter
 {
 public:
-    using ImageCallback =
-        std::function<void(ImageData, DepthImageData)>;
+    using ImageCallback = std::function<void(ImageData, DepthImageData)>;
     using ImuCallback = std::function<void(ImuData)>;
 
     explicit RosAdapter(rclcpp::Node& node);
@@ -37,9 +36,7 @@ private:
     using SyncPolicy =
         message_filters::sync_policies::ApproximateTime<ImageMessage, ImageMessage>;
 
-    void imageCallback(
-        const ImageMessage::ConstSharedPtr& rgb,
-        const ImageMessage::ConstSharedPtr& depth);
+    void imageCallback(const ImageMessage::ConstSharedPtr& rgb, const ImageMessage::ConstSharedPtr& depth);
     void imuCallback(const sensor_msgs::msg::Imu::ConstSharedPtr& imu);
 
     rclcpp::Node& node_;
