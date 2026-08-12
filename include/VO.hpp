@@ -16,7 +16,7 @@ public:
 private:
     FeatureTracker tracker_;
     Frame frame_;
-    Eigen::Isometry3d pose_;
+    Eigen::Isometry3d pose_ = Eigen::Isometry3d::Identity();
     bool first_frame = true;
 
     std::vector<cv::Point3f> pts3d_last_;

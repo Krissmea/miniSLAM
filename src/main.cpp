@@ -5,6 +5,8 @@
 #include <iostream>
 #include <string>
 #include <krisea_log/logger.hpp>
+#include <fstream>
+#include <iomanip>
 
 
 int main(int argc, char** argv)
@@ -29,6 +31,22 @@ int main(int argc, char** argv)
     
     Dataset dataset(g_dataset_path);
 
+    const std::string trajectory_path = "estimated_trajectory.txt";
+    std::ofstream trajectory_file(trajectory_path);
+
+    if (!trajectory_file.is_open())
+    {
+        KR_ERROR(
+          "Failed to create trajectory file: {}",
+          trajectory_path);
+
+        return 1;
+    }
+
+    trajectory_file << std::fixed << std::setprecision(9);
+
+    KR_INFO("Estimated trajectory will be saved to: {}", trajectory_path);
+
     VO vo;
 
     Frame frame;
@@ -40,21 +58,41 @@ int main(int argc, char** argv)
         // KR_INFO("processframe:{}",success);
         if(success)
         {
+            const Eigen::Isometry3d& pose = vo.pose();
             PoseData pD;
-            Eigen::Isometry3d pose = vo.pose();
             pD.timestamp = frame.timestamp;
             pD.position = pose.translation();
+            pD.orientation = Eigen::Quaterniond(pose.rotation()).normalized();
             
             poseviewer.posePath(pD);
+
+            trajectory_file
+                << pD.timestamp << " "
+                << pD.position.x() << " "
+                << pD.position.y() << " "
+                << pD.position.z() << " "
+                << pD.orientation.x() << " "
+                << pD.orientation.y() << " "
+                << pD.orientation.z() << " "
+                << pD.orientation.w()
+                << '\n';
+
             
             
-            KR_INFO("frame:{}",frame.id);
-            KR_INFO("position:{}",pose.translation().x());
+            KR_INFO("frame={} position=[{:.6f}, {:.6f}, {:.6f}] " "quaternion=[{:.6f}, {:.6f}, {:.6f}, {:.6f}]",
+                frame.id,
+                pD.position.x(),
+                pD.position.y(),
+                pD.position.z(),
+                pD.orientation.x(),
+                pD.orientation.y(),
+                pD.orientation.z(),
+                pD.orientation.w());
 
 
 
-            std::cout << "frame:" << frame.id << std::endl;
-            std::cout << "position:" << pose.translation() << std::endl;
+
+            
         }
     }
 

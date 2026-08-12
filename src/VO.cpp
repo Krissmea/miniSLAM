@@ -47,11 +47,16 @@ bool VO::processFrame(Frame& frame)
         }
 
         Eigen::Vector3d t(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
-        pose_.linear() = R.transpose();
-        pose_.translation() = -R.transpose() * t;
+        // solvePnP 给出 T_curr_last：上一帧坐标到当前帧坐标
+        // 轨迹需要其逆变换 T_last_curr
+        Eigen::Isometry3d T_last_curr = Eigen::Isometry3d::Identity();
+        T_last_curr.linear() = R.transpose();
+        T_last_curr.translation() = -R.transpose() * t;
 
-        std::cout<<"PnP success"<<std::endl;
-        std::cout <<" 3D:" << pts3d_last_.size() << " 2D:" << pts2d_curr_.size() <<std::endl;
+        // 累计得到当前帧在世界坐标系中的位姿
+        pose_ = pose_ * T_last_curr;
+
+
     }
     else
     {
