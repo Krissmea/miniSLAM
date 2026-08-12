@@ -1,5 +1,15 @@
 %YAML:1.0
 
+
+# tum数据集
+# camera:
+#   fx: 517.3
+#   fy: 516.5
+#   cx: 318.6
+#   cy: 255.3
+#   depth_scale: 5000.0
+
+# rosbag 奥比335L
 camera:
   fx: 517.3
   fy: 516.5
@@ -10,3 +20,21 @@ camera:
 dataset:
   type: tum
   path: ../../dataset/tum/rgbd_dataset_freiburg1_xyz
+
+# Kalibr RGB-IMU joint calibration.
+# Convention: p_rgb = T_rgb_imu * p_imu
+extrinsic:
+  rgb_frame: "camera_color_optical_frame"
+  imu_frame: "camera_accel_gyro_optical_frame"
+
+  T_rgb_imu: !!opencv-matrix
+    rows: 4
+    cols: 4
+    dt: d
+    data:
+      [
+        0.99995128921366339, 0.0075945186748300995, -0.0063041641817640458, -0.017314050635227091,
+        -0.0075579915341304552, 0.99995462969857618, 0.0057978710190768716, 0.0077346371955832076,
+        0.0063479101996635288, -0.0057499417807049119, 0.9999633204301126, -0.026625606727384503,
+        0.0, 0.0, 0.0, 1.0
+      ]

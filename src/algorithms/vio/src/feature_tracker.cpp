@@ -261,6 +261,12 @@ void FeatureTracker::get3d2d(Frame& frame_last, std::vector<cv::Point3f>& pts3d_
         int u = static_cast<int>(pts_last_[i].x);
         int v = static_cast<int>(pts_last_[i].y);
 
+        if (frame_last.depth.empty() || frame_last.depth.type() != CV_16UC1 ||
+            u < 0 || v < 0 || u >= frame_last.depth.cols || v >= frame_last.depth.rows)
+        {
+            continue;
+        }
+
         float depth = frame_last.depth.at<uint16_t>(v, u);
         if (depth == 0)
             continue;

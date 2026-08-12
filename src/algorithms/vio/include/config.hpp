@@ -11,6 +11,9 @@ extern double g_cy;
 extern cv::Mat g_K;
 extern double g_depth_scale;
 extern std::string g_dataset_path;
+extern std::string g_rgb_frame;
+extern std::string g_imu_frame;
+extern cv::Mat g_T_rgb_imu;
 
 bool loadConfig(const std::string& filename);
 
