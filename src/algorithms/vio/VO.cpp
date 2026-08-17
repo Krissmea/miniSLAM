@@ -30,8 +30,27 @@ bool VO::processFrame(Frame& frame)
     cv::Mat dist = cv::Mat::zeros(5,1,CV_64F);
     cv::Mat rvec;
     cv::Mat tvec;
-    bool success = cv::solvePnPRansac(pts3d_last_, pts2d_curr_, K, dist, rvec, tvec );
+    cv::Mat inliers;
+
+    bool success = cv::solvePnPRansac(
+        pts3d_last_, 
+        pts2d_curr_, 
+        K, 
+        dist, 
+        rvec, 
+        tvec, 
+        false,
+        100,      // iterationsCount
+        3.0,      // reprojectionError
+        0.99,     // confidence
+        inliers,
+        cv::SOLVEPNP_ITERATIVE);
     
+    const int match_count =
+    static_cast<int>(pts3d_last_.size());
+    const int inlier_count = inliers.rows;
+    const double inlier_ratio = match_count > 0 ? static_cast<double>(inlier_count) / match_count : 0.0;
+
     if(success)
     {
         cv::Mat R_cv;

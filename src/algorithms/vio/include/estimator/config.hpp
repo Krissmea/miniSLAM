@@ -14,6 +14,7 @@ extern std::string g_dataset_path;
 extern std::string g_rgb_frame;
 extern std::string g_imu_frame;
 extern cv::Mat g_T_rgb_imu;
+extern bool SHOW_KLT_TRACKING;
 
 bool loadConfig(const std::string& filename);
 

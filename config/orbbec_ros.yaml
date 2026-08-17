@@ -1,25 +1,12 @@
 %YAML:1.0
 
-
-# tum数据集
-# camera:
-#   fx: 517.3
-#   fy: 516.5
-#   cx: 318.6
-#   cy: 255.3
-#   depth_scale: 5000.0
-
-# rosbag 奥比335L
+# Orbbec 335L used by the ROS 2 node.
 camera:
-  fx: 517.3
-  fy: 516.5
-  cx: 318.6
-  cy: 255.3
-  depth_scale: 5000.0
-
-dataset:
-  type: tum
-  path: ../../dataset/tum/rgbd_dataset_freiburg1_xyz
+  fx: 691.8631591796875
+  fy: 692.1622924804688
+  cx: 648.3563232421875
+  cy: 357.9222412109375
+  depth_scale: 1000.0
 
 # Kalibr RGB-IMU joint calibration.
 # Convention: p_rgb = T_rgb_imu * p_imu
@@ -38,3 +25,5 @@ extrinsic:
         0.0063479101996635288, -0.0057499417807049119, 0.9999633204301126, -0.026625606727384503,
         0.0, 0.0, 0.0, 1.0
       ]
+
+SHOW_KLT_TRACKING: 0

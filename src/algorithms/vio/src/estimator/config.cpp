@@ -13,6 +13,7 @@ std::string g_dataset_path;
 std::string g_rgb_frame = "camera_color_optical_frame";
 std::string g_imu_frame = "camera_accel_gyro_optical_frame";
 cv::Mat g_T_rgb_imu = cv::Mat::eye(4, 4, CV_64F);
+bool SHOW_KLT_TRACKING = false;
 
 bool loadConfig(const std::string& filename)
 {
@@ -31,7 +32,12 @@ bool loadConfig(const std::string& filename)
     fs["camera"]["cx"] >> g_cx;
     fs["camera"]["cy"] >> g_cy;
     fs["camera"]["depth_scale"] >> g_depth_scale;
-    fs["dataset"]["path"] >> g_dataset_path;
+    g_dataset_path.clear();
+    const cv::FileNode dataset = fs["dataset"];
+    if (!dataset.empty())
+    {
+        dataset["path"] >> g_dataset_path;
+    }
 
     const cv::FileNode extrinsic = fs["extrinsic"];
     if (!extrinsic.empty())
@@ -49,11 +55,18 @@ bool loadConfig(const std::string& filename)
 
     g_K = (cv::Mat_<double>(3, 3) << g_fx, 0, g_cx, 0, g_fy, g_cy, 0, 0, 1);
 
-    std::filesystem::path dataset_path(g_dataset_path);
-    if (dataset_path.is_relative())
+    fs["SHOW_KLT_TRACKING"] >> SHOW_KLT_TRACKING;
+
+    if (!g_dataset_path.empty())
     {
-        std::filesystem::path config_dir = std::filesystem::path(filename).parent_path();
-        g_dataset_path = (config_dir / dataset_path).lexically_normal().string();
+        std::filesystem::path dataset_path(g_dataset_path);
+        if (dataset_path.is_relative())
+        {
+            const std::filesystem::path config_dir =
+                std::filesystem::path(filename).parent_path();
+            g_dataset_path =
+                (config_dir / dataset_path).lexically_normal().string();
+        }
     }
 
 

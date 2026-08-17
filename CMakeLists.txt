@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(OpenCV REQUIRED)
+find_package(Eigen3 REQUIRED)
+
 
 # =============================================================================
 # VIO algorithm library (ROS independent)
@@ -16,11 +18,22 @@ set(MINI_SLAM_VIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/algorithms/vio")
 
 add_library(
     mini_slam_vio
-    ${MINI_SLAM_VIO_DIR}/src/config.cpp
-    ${MINI_SLAM_VIO_DIR}/src/feature_tracker.cpp
-    ${MINI_SLAM_VIO_DIR}/src/point_cloud.cpp
-    ${MINI_SLAM_VIO_DIR}/src/pose.cpp
-    ${MINI_SLAM_VIO_DIR}/src/VO.cpp
+    # VO
+    ${MINI_SLAM_VIO_DIR}/VO.cpp
+
+    # estimator
+    ${MINI_SLAM_VIO_DIR}/src/estimator/config.cpp
+
+    # feature manager
+
+    # feature tracker
+    ${MINI_SLAM_VIO_DIR}/src/feature_Tracker/feature_tracker.cpp
+
+    # initial
+
+    # utility
+    ${MINI_SLAM_VIO_DIR}/src/utility/point_cloud.cpp
+    ${MINI_SLAM_VIO_DIR}/src/utility/pose.cpp
 )
 
 add_library(krisea::mini_slam_vio ALIAS mini_slam_vio)
@@ -28,7 +41,19 @@ add_library(krisea::mini_slam_vio ALIAS mini_slam_vio)
 target_include_directories(
     mini_slam_vio
     PUBLIC
+        # VO.hpp
+        ${MINI_SLAM_VIO_DIR}
+
+        # module headers
         ${MINI_SLAM_VIO_DIR}/include
+        ${MINI_SLAM_VIO_DIR}/include/estimator
+
+        ${MINI_SLAM_VIO_DIR}/include/feature_Tracker
+        
+        ${MINI_SLAM_VIO_DIR}/include/utility
+
+        # OpenCV public headers are used by your headers
+        ${OpenCV_INCLUDE_DIRS}
 )
 
 target_link_libraries(
@@ -36,6 +61,7 @@ target_link_libraries(
     PUBLIC
         krisea::common
         krisea::log
+        Eigen3::Eigen
         ${OpenCV_LIBS}
 )
 
@@ -48,13 +74,13 @@ target_compile_features(mini_slam_vio PUBLIC cxx_std_20)
 add_executable(
     mini_slam
     apps/mini_slam_main.cpp
-    ${MINI_SLAM_VIO_DIR}/src/dataset.cpp
+    ${MINI_SLAM_VIO_DIR}/src/estimator/dataset.cpp
 )
 
 target_compile_definitions(
     mini_slam
     PRIVATE
-        MINI_SLAM_DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/miniSLAM.yaml"
+        MINI_SLAM_DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/tum.yaml"
 )
 
 target_link_libraries(mini_slam PRIVATE krisea::mini_slam_vio)
@@ -94,12 +120,14 @@ if(MINI_SLAM_BUILD_ROS2)
             mini_slam_ros_adapter
             PUBLIC
                 ${CMAKE_CURRENT_SOURCE_DIR}/include
+                ${OpenCV_INCLUDE_DIRS}
         )
 
         target_link_libraries(
             mini_slam_ros_adapter
             krisea::common
             krisea::log
+            Eigen3::Eigen
             ${OpenCV_LIBS}
         )
 
@@ -123,7 +151,7 @@ if(MINI_SLAM_BUILD_ROS2)
         target_compile_definitions(
             mini_slam_ros_node
             PRIVATE
-                MINI_SLAM_DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/miniSLAM.yaml"
+                MINI_SLAM_DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/orbbec_ros.yaml"
         )
 
         target_link_libraries(

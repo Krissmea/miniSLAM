@@ -1,0 +1,15 @@
+%YAML:1.0
+
+# TUM RGB-D dataset: rgbd_dataset_freiburg1_xyz
+camera:
+  fx: 517.3
+  fy: 516.5
+  cx: 318.6
+  cy: 255.3
+  depth_scale: 5000.0
+
+dataset:
+  type: tum
+  path: ../../dataset/tum/rgbd_dataset_freiburg1_xyz
+
+SHOW_KLT_TRACKING: 0
