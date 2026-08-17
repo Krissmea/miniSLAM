@@ -12,4 +12,4 @@ dataset:
   type: tum
   path: ../../dataset/tum/rgbd_dataset_freiburg1_xyz
 
-SHOW_KLT_TRACKING: 0
+SHOW_KLT_TRACKING: 1

@@ -26,4 +26,4 @@ extrinsic:
         0.0, 0.0, 0.0, 1.0
       ]
 
-SHOW_KLT_TRACKING: 0
+SHOW_KLT_TRACKING: 1

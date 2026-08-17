@@ -1,10 +1,31 @@
-#ifndef VO_H
-#define VO_H
+#ifndef VIO_PLUGIN_H
+#define VIO_PLUGIN_H
 
 #include <Eigen/Geometry>
 #include <common/frame.hpp>
 #include "feature_tracker.hpp"
 
+
+class VioPlugin
+{
+public:
+    VioPlugin();
+    ~VioPlugin();
+
+    using PoseCallback = std::function<void(const PoseData&)>;
+
+    bool initialize(const std::string& comfig_path);
+    void inputFrame(Fram& frame);
+    void inputImu(ImuData& imu);
+    void setPoseCallback(PoseCallback callback);
+    void reset();
+
+private:
+    FeatureTracker tracker_;
+    Estimator estimator_;
+    PoseCallback pose_callback_;
+    
+}
 
 
 class VO
