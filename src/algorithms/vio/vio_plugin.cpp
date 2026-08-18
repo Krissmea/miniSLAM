@@ -1,97 +1,44 @@
 #include <iostream>
-#include "VO.hpp"
+#include "vio_plugin.hpp"
 #include <krisea_log/logger.hpp>
+ #include <utility>
 
 
 
-bool VO::processFrame(Frame& frame)
+void VioPlugin::inputFrame(Frame& frame)
 {
-    if (first_frame)
+    if (!estimator_.processFrame(frame))
     {
-        frame_ = frame;
-        first_frame=false;
-        return true;
+        return;
     }
 
-    tracker_.detect_klt(frame_, frame);
+    const Eigen::Isometry3d& estimated_pose = estimator_.pose();
 
-    //3d-2d
-    tracker_.get3d2d(frame_, pts3d_last_, pts2d_curr_);
-    if(pts3d_last_.size()<10)
-        {
+    PoseData pose_data;
+    pose_data.timestamp = frame.timestamp;
+    pose_data.position = estimated_pose.translation();
+    pose_data.orientation =
+        Eigen::Quaterniond(estimated_pose.rotation()).normalized();
 
-            KR_WARN("Not enough 3D-2D correspondences: {}", pts3d_last_.size());
-            frame_=frame;
-            return false;
-        }
-
-    //pnp
-    cv::Mat K = g_K;
-    cv::Mat dist = cv::Mat::zeros(5,1,CV_64F);
-    cv::Mat rvec;
-    cv::Mat tvec;
-    cv::Mat inliers;
-
-    bool success = cv::solvePnPRansac(
-        pts3d_last_, 
-        pts2d_curr_, 
-        K, 
-        dist, 
-        rvec, 
-        tvec, 
-        false,
-        100,      // iterationsCount
-        3.0,      // reprojectionError
-        0.99,     // confidence
-        inliers,
-        cv::SOLVEPNP_ITERATIVE);
-    
-    const int match_count =
-    static_cast<int>(pts3d_last_.size());
-    const int inlier_count = inliers.rows;
-    const double inlier_ratio = match_count > 0 ? static_cast<double>(inlier_count) / match_count : 0.0;
-
-    if(success)
+    if (pose_callback_)
     {
-        cv::Mat R_cv;
-        cv::Rodrigues(rvec, R_cv);
-
-        Eigen::Matrix3d R;
-        for (int row = 0; row < 3; ++row)
-        {
-            for (int col = 0; col < 3; ++col)
-            {
-                R(row, col) = R_cv.at<double>(row, col);
-            }
-        }
-
-        Eigen::Vector3d t(tvec.at<double>(0), tvec.at<double>(1), tvec.at<double>(2));
-        // solvePnP 给出 T_curr_last：上一帧坐标到当前帧坐标
-        // 轨迹需要其逆变换 T_last_curr
-        Eigen::Isometry3d T_last_curr = Eigen::Isometry3d::Identity();
-        T_last_curr.linear() = R.transpose();
-        T_last_curr.translation() = -R.transpose() * t;
-
-        // 累计得到当前帧在世界坐标系中的位姿
-        pose_ = pose_ * T_last_curr;
-
-
-    }
-    else
-    {
-        frame_ = frame;
-        return false;
+        pose_callback_(pose_data);
     }
 
-    //更新pose
-
-
-    frame_ = frame;
-
-    return true;
 }
 
-const Eigen::Isometry3d& VO::pose() const
+void VioPlugin::inputImu(const ImuData& imu)
 {
-    return pose_;
+    estimator_.processImu(imu);
+
+}
+
+void VioPlugin::setPoseCallback(PoseCallback callback)
+{
+    pose_callback_ = std::move(callback);
+}
+
+void VioPlugin::reset()
+{
+    estimator_.reset();
 }

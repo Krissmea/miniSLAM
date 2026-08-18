@@ -1,4 +1,4 @@
-#include "VO.hpp"
+#include "vio_plugin.hpp"
 #include "config.hpp"
 
 #include <common/frame.hpp>
@@ -35,11 +35,20 @@ int main(int argc, char** argv)
     }
 
     mini_slam::RosAdapter adapter(*node);
-    VO vo;
+    VioPlugin vio;
     int next_frame_id = 0;
 
+    vio.setPoseCallback(
+        [&adapter, &world_frame](const PoseData& estimated_pose) {
+          PoseData output_pose = estimated_pose;
+          output_pose.frame_id = world_frame;
+
+          adapter.publishPose(output_pose);
+        });
+
+
     adapter.setImageCallback(
-        [&adapter, &vo, &next_frame_id, &world_frame](
+        [&vio, &next_frame_id](
             ImageData rgb, DepthImageData depth) {
             if (depth.image.type() != CV_16UC1)
             {
@@ -53,21 +62,12 @@ int main(int argc, char** argv)
             frame.rgb = std::move(rgb.image);
             frame.depth = std::move(depth.image);
 
-            if (!vo.processFrame(frame))
-            {
-                return;
-            }
+            vio.inputFrame(frame);
 
-            PoseData pose;
-            pose.timestamp = frame.timestamp;
-            pose.frame_id = world_frame;
-            pose.position = vo.pose().translation();
-            pose.orientation = Eigen::Quaterniond(vo.pose().rotation()).normalized();
-            adapter.publishPose(pose);
         });
 
-    adapter.setImuCallback([](ImuData /* imu */) {
-        // TODO: call the future VO/VIO IMU process interface.
+    adapter.setImuCallback([&vio](ImuData imu) {
+        vio.inputImu(imu);
     });
 
     KR_INFO("miniSLAM ROS node ready");

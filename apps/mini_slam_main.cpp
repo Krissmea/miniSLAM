@@ -1,5 +1,5 @@
 #include "dataset.hpp"
-#include "VO.hpp"
+#include "vio_plugin.hpp"
 #include "pose.hpp"
 
 #include <common/posedata.hpp>
@@ -37,42 +37,41 @@ int main(int argc, char** argv)
     trajectory_file << std::fixed << std::setprecision(9);
     KR_INFO("Estimated trajectory will be saved to: {}", trajectory_path);
 
-    VO vo;
+    VioPlugin vio;
     Frame frame;
     Pose pose_viewer;
 
-    while (dataset.next(frame))
-    {
-        if (!vo.processFrame(frame))
-        {
-            continue;
-        }
-
-        const Eigen::Isometry3d& pose = vo.pose();
-        PoseData pose_data;
-        pose_data.timestamp = frame.timestamp;
-        pose_data.position = pose.translation();
-        pose_data.orientation = Eigen::Quaterniond(pose.rotation()).normalized();
-        pose_viewer.posePath(pose_data);
+    vio.setPoseCallback(
+        [&](const PoseData& pose_data) {
+            pose_viewer.posePath(pose_data);
 
         trajectory_file
-            << pose_data.timestamp << " "
-            << pose_data.position.x() << " "
-            << pose_data.position.y() << " "
-            << pose_data.position.z() << " "
-            << pose_data.orientation.x() << " "
-            << pose_data.orientation.y() << " "
-            << pose_data.orientation.z() << " "
-            << pose_data.orientation.w() << '\n';
+              << pose_data.timestamp << " "
+              << pose_data.position.x() << " "
+              << pose_data.position.y() << " "
+              << pose_data.position.z() << " "
+              << pose_data.orientation.x() << " "
+              << pose_data.orientation.y() << " "
+              << pose_data.orientation.z() << " "
+              << pose_data.orientation.w() << '\n';
 
         KR_INFO(
-            "frame={} position=[{:.6f}, {:.6f}, {:.6f}] "
-            "quaternion=[{:.6f}, {:.6f}, {:.6f}, {:.6f}]",
-            frame.id,
-            pose_data.position.x(), pose_data.position.y(), pose_data.position.z(),
-            pose_data.orientation.x(), pose_data.orientation.y(),
-            pose_data.orientation.z(), pose_data.orientation.w());
-    }
+              "frame={} position=[{:.6f}, {:.6f}, {:.6f}] "
+              "quaternion=[{:.6f}, {:.6f}, {:.6f}, {:.6f}]",
+              frame.id,
+              pose_data.position.x(),
+              pose_data.position.y(),
+              pose_data.position.z(),
+              pose_data.orientation.x(),
+              pose_data.orientation.y(),
+              pose_data.orientation.z(),
+              pose_data.orientation.w());
+        });
+
+   while (dataset.next(frame))
+   {
+       vio.inputFrame(frame);
+   }
 
     pose_viewer.pathShow();
     return 0;

@@ -19,9 +19,10 @@ set(MINI_SLAM_VIO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/algorithms/vio")
 add_library(
     mini_slam_vio
     # VO
-    ${MINI_SLAM_VIO_DIR}/VO.cpp
+    ${MINI_SLAM_VIO_DIR}/vio_plugin.cpp
 
     # estimator
+    ${MINI_SLAM_VIO_DIR}/src/estimator/estimator.cpp
     ${MINI_SLAM_VIO_DIR}/src/estimator/config.cpp
 
     # feature manager
