@@ -2,24 +2,25 @@
 
 
 //生成点云，将某个帧的深度图转换为三维点云
-void PointCloud::generate(Frame& frame, double depth_scale)
+std::vector<Eigen::Vector3d> PointCloud::generate(DepthImageData& depth, double depth_scale)
 {
-    frame.points3d.clear();
+    std::vector<Eigen::Vector3d> points3d;
 
-    for (int v = 0; v < frame.depth.rows; v++)
+    for (int v = 0; v < depth.image.rows; v++)
     {
-        for (int u = 0; u < frame.depth.cols; u++)
+        for (int u = 0; u < depth.image.cols; u++)
         {
-            uint16_t d = frame.depth.at<uint16_t>(v,u);
+            uint16_t d = depth.image.at<uint16_t>(v,u);
             if (d == 0)
                 continue;
             
             double depth_m = d / depth_scale;
 
             Eigen::Vector3d p = pixel2camera(u, v, depth_m);
-            frame.points3d.push_back(p);
+            points3d.push_back(p);
         }
     }
+    return points3d;
 }
 
 //将某个像素坐标转换为3D坐标

@@ -20,7 +20,7 @@ void Dataset::getRgbData(std::ifstream& stream, const std::string& path )
 
         ss >> timestamp >>  filename;
 
-        ImageData rgb;
+        DatasetsImageData rgb;
         rgb.timestamp = timestamp;
         rgb.filename = path + "/" + filename;
 
@@ -43,7 +43,7 @@ void Dataset::getDepthData(std::ifstream& stream, const std::string& path )
 
         ss >> timestamp >>  filename;
 
-        ImageData depth;
+        DatasetsImageData depth;
         depth.timestamp = timestamp;
         depth.filename = path + "/" + filename;
 
@@ -86,8 +86,8 @@ bool Dataset::next(Frame& frame)
         return false;
     }
 
-    ImageData rgb_data = rgb_buf_[current_index_];
-    ImageData depth_data = depth_buf_[current_index_];
+    DatasetsImageData rgb_data = rgb_buf_[current_index_];
+    DatasetsImageData depth_data = depth_buf_[current_index_];
 
     frame.rgb = cv::imread(rgb_data.filename, cv::IMREAD_COLOR);
     frame.depth = cv::imread(depth_data.filename, cv::IMREAD_UNCHANGED);

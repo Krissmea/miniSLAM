@@ -7,7 +7,7 @@
 #include <vector>
 
 
-struct ImageData
+struct DatasetsImageData
 {
     double timestamp;
     std::string filename;
@@ -23,8 +23,8 @@ public:
     void getDepthData(std::ifstream& stream, const std::string& path );
     bool next(Frame& frame);
 private:
-    std::vector<ImageData> rgb_buf_;
-    std::vector<ImageData> depth_buf_;
+    std::vector<DatasetsImageData> rgb_buf_;
+    std::vector<DatasetsImageData> depth_buf_;
 
     int current_index_ = 0; //待梳理初值
 };

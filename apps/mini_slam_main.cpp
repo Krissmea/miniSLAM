@@ -1,9 +1,10 @@
 #include "dataset.hpp"
 #include "vio_plugin.hpp"
 #include "pose.hpp"
-
+#include <common/image_data.hpp>
 #include <common/posedata.hpp>
 #include <krisea_log/logger.hpp>
+#include <utility>
 
 #include <fstream>
 #include <iomanip>
@@ -70,7 +71,17 @@ int main(int argc, char** argv)
 
    while (dataset.next(frame))
    {
-       vio.inputFrame(frame);
+       ImageData rgb;
+       rgb.timestamp = frame.timestamp;
+       rgb.image = std::move(frame.rgb);
+
+       DepthImageData depth;
+       depth.timestamp = frame.timestamp;
+       depth.image = std::move(frame.depth);
+
+       vio.inputImage(std::move(rgb));
+       vio.inputDepth(std::move(depth));
+       vio.process();
    }
 
     pose_viewer.pathShow();

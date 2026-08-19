@@ -106,7 +106,6 @@ if(MINI_SLAM_BUILD_ROS2)
         find_package(sensor_msgs REQUIRED)
         find_package(geometry_msgs REQUIRED)
         find_package(nav_msgs REQUIRED)
-        find_package(message_filters REQUIRED)
 
         # Communication/conversion only. It intentionally does not link VIO.
         add_library(
@@ -140,7 +139,6 @@ if(MINI_SLAM_BUILD_ROS2)
             sensor_msgs
             geometry_msgs
             nav_msgs
-            message_filters
         )
 
         # Composition point only: this executable connects adapter and algorithm.

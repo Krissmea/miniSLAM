@@ -1,11 +1,14 @@
 #include "estimator.hpp"
-#include <iostream>
-#include <krisea_log/logger.hpp>
+
 #include "config.hpp"
+
+#include <krisea_log/logger.hpp>
 
 #include <algorithm>
 #include <cmath>
 #include <limits>
+#include <iterator>
+#include <utility>
 #include <vector>
 
 namespace
@@ -17,6 +20,18 @@ constexpr double kMinInlierRatio = 0.5;
 constexpr double kMaxMedianReprojectionError = 2.5;
 constexpr double kMaxTranslationPerFrame = 0.5;
 constexpr double kMaxRotationRadians = 20.0 * CV_PI / 180.0;
+
+template <typename T>
+void insertByTimestamp(std::deque<T>& buffer, T data)
+{
+    const auto position = std::upper_bound(
+        buffer.begin(), buffer.end(), data.timestamp,
+        [](double timestamp, const T& buffered) {
+            return timestamp < buffered.timestamp;
+        });
+    buffer.insert(position, std::move(data));
+}
+
 
 double medianReprojectionError(
     const std::vector<cv::Point3f>& object_points,
@@ -34,8 +49,7 @@ double medianReprojectionError(
     for (int row = 0; row < inliers.rows; ++row)
     {
         const int index = inliers.at<int>(row, 0);
-        if (index < 0 ||
-            index >= static_cast<int>(object_points.size()))
+        if (index < 0 || index >= static_cast<int>(object_points.size()))
         {
             continue;
         }
@@ -67,9 +81,121 @@ double medianReprojectionError(
 
 }  // namespace
 
-
-bool Estimator::processFrame(Frame& frame)
+void Estimator::inputFrame(Frame frame)
 {
+    insertByTimestamp(frame_buf_, std::move(frame));
+}
+
+void Estimator::inputImu(ImuData imu)
+{
+    imu_stream_seen_ = true;
+    insertByTimestamp(imu_buf_, std::move(imu));
+}
+
+bool Estimator::imuCoversFrame(double frame_timestamp) const
+{
+    // Keep the existing RGB-D-only offline path working when no IMU stream exists.
+    if (!imu_stream_seen_)
+    {
+        return true;
+    }
+
+    if (imu_buf_.empty())
+    {
+        return false;
+    }
+
+    // Estimator waits until IMU time has reached/passed the frame time.
+    return imu_buf_.back().timestamp >= frame_timestamp;
+}
+
+std::vector<ImuData> Estimator::collectImuForFrame(double frame_timestamp) const
+{
+    std::vector<ImuData> samples;
+    if (!imu_stream_seen_)
+    {
+        return samples;
+    }
+
+    for (const auto& imu : imu_buf_)
+    {
+        if (imu.timestamp > frame_timestamp)
+        {
+            break;        }
+        samples.push_back(imu);
+    }
+
+    return samples;
+}
+
+
+void Estimator::pruneImuBefore(double frame_timestamp)
+{
+    if (imu_buf_.empty())
+    {
+        return;
+    }
+
+    const auto first_after = std::upper_bound(
+        imu_buf_.begin(), imu_buf_.end(), frame_timestamp,
+        [](double timestamp, const ImuData& imu) {
+            return timestamp < imu.timestamp;
+        });
+
+    if (first_after == imu_buf_.begin())
+    {
+        return;
+    }
+
+    // Keep the last IMU sample at/before the frame as the left boundary
+    // for the next frame interval.
+    const auto keep = std::prev(first_after);
+    imu_buf_.erase(imu_buf_.begin(), keep);
+}
+
+std::optional<EstimatorResult> Estimator::process()
+{
+    while (!frame_buf_.empty())
+    {
+        const double frame_timestamp = frame_buf_.front().timestamp;
+        if (!imuCoversFrame(frame_timestamp))
+        {
+            return std::nullopt;
+        }
+
+        Frame frame = std::move(frame_buf_.front());
+        frame_buf_.pop_front();
+
+        const auto imu_samples = collectImuForFrame(frame_timestamp);
+        const bool solved = solveFrame(frame, imu_samples);
+
+        last_processed_frame_timestamp_ = frame_timestamp;
+        pruneImuBefore(frame_timestamp);
+
+        // A rejected visual update is consumed; continue looking for the next
+        // processable frame instead of blocking the queue on a bad frame.
+        if (!solved)
+        {
+            continue;
+        }
+
+        EstimatorResult result;
+        result.timestamp = frame_timestamp;
+        result.pose = pose_;
+        return result;
+    }
+
+    return std::nullopt;
+}
+
+bool Estimator::solveFrame(
+    Frame& frame,
+    const std::vector<ImuData>& imu_samples)
+{
+    // The timestamp-aligned IMU segment is intentionally owned by Estimator.
+    // Preintegration/fusion can be added here without changing Plugin I/O.
+    (void)imu_samples;
+
     if (first_frame_)
     {
         frame_ = frame;
@@ -79,7 +205,7 @@ bool Estimator::processFrame(Frame& frame)
 
     tracker_.detect_klt(frame_, frame);
 
-    //3d-2d
+    // 3D-2D correspondences.
     tracker_.get3d2d(frame_, pts3d_last_, pts2d_curr_);
     if (pts3d_last_.size() < kMinCorrespondences)
     {
@@ -90,27 +216,26 @@ bool Estimator::processFrame(Frame& frame)
         return false;
     }
 
-    //pnp
-    // cv::Mat K = g_K;
-    cv::Mat dist = cv::Mat::zeros(5,1,CV_64F);
+    
+    cv::Mat dist = cv::Mat::zeros(5, 1, CV_64F);
     cv::Mat rvec;
     cv::Mat tvec;
     cv::Mat inliers;
 
     const bool success = cv::solvePnPRansac(
-        pts3d_last_, 
-        pts2d_curr_, 
-        g_K, 
-        dist, 
-        rvec, 
-        tvec, 
+        pts3d_last_,
+        pts2d_curr_,
+        g_K,
+        dist,
+        rvec,
+        tvec,
         false,
         100,      // iterationsCount
         3.0,      // reprojectionError
         0.99,     // confidence
         inliers,
         cv::SOLVEPNP_ITERATIVE);
-    
+
     const int match_count = static_cast<int>(pts3d_last_.size());
     const int inlier_count = inliers.rows;
     const double inlier_ratio = match_count > 0
@@ -186,12 +311,6 @@ bool Estimator::processFrame(Frame& frame)
     return true;
 }
 
-void Estimator::processImu(const ImuData& imu)
-{
-    // IMU preintegration will be implemented later.
-    (void)imu;
-}
-
 const Eigen::Isometry3d& Estimator::pose() const
 {
     return pose_;
@@ -204,6 +323,11 @@ void Estimator::reset()
 
     pose_ = Eigen::Isometry3d::Identity();
     first_frame_ = true;
+    imu_stream_seen_ = false;
+    last_processed_frame_timestamp_ = -1.0;
+ 
+    frame_buf_.clear();
+    imu_buf_.clear();
 
     pts3d_last_.clear();
     pts2d_curr_.clear();

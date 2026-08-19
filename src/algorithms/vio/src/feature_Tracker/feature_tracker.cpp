@@ -423,8 +423,7 @@ void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
     active_track_counts_ = valid_track_counts;
     addNewFeatures(current_gray, detection_mask);
 
-    frame_last.keypoints = pts_last_;
-    frame_curr.keypoints = active_points_;
+    
 
     KR_INFO(
         "Feature tracking: input={} fb_valid={} geometry_valid={} active={}",

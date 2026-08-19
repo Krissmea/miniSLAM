@@ -1,7 +1,6 @@
 #include "vio_plugin.hpp"
 #include "config.hpp"
 
-#include <common/frame.hpp>
 #include <common/image_data.hpp>
 #include <common/imu_data.hpp>
 #include <common/posedata.hpp>
@@ -36,38 +35,25 @@ int main(int argc, char** argv)
 
     mini_slam::RosAdapter adapter(*node);
     VioPlugin vio;
-    int next_frame_id = 0;
 
     vio.setPoseCallback(
         [&adapter, &world_frame](const PoseData& estimated_pose) {
           PoseData output_pose = estimated_pose;
           output_pose.frame_id = world_frame;
-
           adapter.publishPose(output_pose);
         });
-
-
-    adapter.setImageCallback(
-        [&vio, &next_frame_id](
-            ImageData rgb, DepthImageData depth) {
-            if (depth.image.type() != CV_16UC1)
-            {
-                KR_ERROR("Unsupported depth type: {}", depth.image.type());
-                return;
-            }
-
-            Frame frame;
-            frame.id = next_frame_id++;
-            frame.timestamp = rgb.timestamp;
-            frame.rgb = std::move(rgb.image);
-            frame.depth = std::move(depth.image);
-
-            vio.inputFrame(frame);
-
-        });
-
+    
+    adapter.setRgbCallback([&vio](ImageData rgb) {
+        vio.inputImage(std::move(rgb));
+        vio.process();
+    });
+    adapter.setDepthCallback([&vio](DepthImageData depth) {
+        vio.inputDepth(std::move(depth));
+        vio.process();
+    });
     adapter.setImuCallback([&vio](ImuData imu) {
-        vio.inputImu(imu);
+        vio.inputImu(std::move(imu));
+        vio.process();
     });
 
     KR_INFO("miniSLAM ROS node ready");
