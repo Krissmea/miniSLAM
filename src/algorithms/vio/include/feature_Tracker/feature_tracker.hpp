@@ -4,6 +4,7 @@
 #include "point_cloud.hpp"
 #include <common/frame.hpp>
 #include <opencv2/core.hpp>
+#include <unordered_map>
 #include <vector>
 
 struct TrackedFeature
@@ -17,12 +18,31 @@ struct TrackedFeature
 class FeatureTracker
 {
 public:
+    bool initialize(Frame& frame);
     void detect_klt(Frame& frame_last, Frame& frame_curr);
     void get3d2d(
         Frame& frame_last,
         std::vector<cv::Point3f>& pts3d_last,
         std::vector<cv::Point2f>& pts2d_curr);
     void reset();
+
+    void buildReferenceData(
+        Frame& frame,
+        std::unordered_map<int, cv::Point3f>& points3d,
+        std::unordered_map<int, cv::Point2f>& pixels);
+    void get3d2dFromReference(
+        const std::unordered_map<int, cv::Point3f>& reference_points3d,
+        std::vector<cv::Point3f>& pts3d_reference,
+        std::vector<cv::Point2f>& pts2d_current) const;
+
+    const std::vector<cv::Point2f>& activePoints() const
+    {
+        return active_points_;
+    }
+    const std::vector<int>& activeIds() const
+    {
+        return active_ids_;
+    }
 
     const std::vector<cv::Point2f>& ptsLast() const { return pts_last_; }
     const std::vector<cv::Point2f>& ptsCurr() const { return pts_curr_; }

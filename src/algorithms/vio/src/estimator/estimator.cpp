@@ -3,7 +3,7 @@
 #include "config.hpp"
 
 #include <krisea_log/logger.hpp>
-
+#include <opencv2/calib3d.hpp>
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -20,6 +20,11 @@ constexpr double kMinInlierRatio = 0.5;
 constexpr double kMaxMedianReprojectionError = 2.5;
 constexpr double kMaxTranslationPerFrame = 0.5;
 constexpr double kMaxRotationRadians = 20.0 * CV_PI / 180.0;
+
+constexpr int kMaxFramesBetweenKeyframes = 10;
+constexpr double kKeyframeParallaxPixels = 15.0;
+constexpr std::size_t kMinKeyframeCommonFeatures = 60;
+constexpr int kMaxFramesBetweenKeyFrames = 10;
 
 template <typename T>
 void insertByTimestamp(std::deque<T>& buffer, T data)
@@ -94,7 +99,6 @@ void Estimator::inputImu(ImuData imu)
 
 bool Estimator::imuCoversFrame(double frame_timestamp) const
 {
-    // Keep the existing RGB-D-only offline path working when no IMU stream exists.
     if (!imu_stream_seen_)
     {
         return true;
@@ -105,7 +109,6 @@ bool Estimator::imuCoversFrame(double frame_timestamp) const
         return false;
     }
 
-    // Estimator waits until IMU time has reached/passed the frame time.
     return imu_buf_.back().timestamp >= frame_timestamp;
 }
 
@@ -121,7 +124,8 @@ std::vector<ImuData> Estimator::collectImuForFrame(double frame_timestamp) const
     {
         if (imu.timestamp > frame_timestamp)
         {
-            break;        }
+            break;
+        }
         samples.push_back(imu);
     }
 
@@ -147,8 +151,6 @@ void Estimator::pruneImuBefore(double frame_timestamp)
         return;
     }
 
-    // Keep the last IMU sample at/before the frame as the left boundary
-    // for the next frame interval.
     const auto keep = std::prev(first_after);
     imu_buf_.erase(imu_buf_.begin(), keep);
 }
@@ -172,8 +174,6 @@ std::optional<EstimatorResult> Estimator::process()
         last_processed_frame_timestamp_ = frame_timestamp;
         pruneImuBefore(frame_timestamp);
 
-        // A rejected visual update is consumed; continue looking for the next
-        // processable frame instead of blocking the queue on a bad frame.
         if (!solved)
         {
             continue;
@@ -188,81 +188,66 @@ std::optional<EstimatorResult> Estimator::process()
     return std::nullopt;
 }
 
-bool Estimator::solveFrame(
-    Frame& frame,
-    const std::vector<ImuData>& imu_samples)
+void Estimator::updateReference(RefFrame& reference, Frame& frame, const Eigen::Isometry3d& pose)
 {
-    // The timestamp-aligned IMU segment is intentionally owned by Estimator.
-    // Preintegration/fusion can be added here without changing Plugin I/O.
-    (void)imu_samples;
+    reference.frame = frame;
+    reference.pose = pose;
+    tracker_.buildReferenceData(frame, reference.points3d, reference.pixels);
+    reference.valid = true;
+}
 
-    if (first_frame_)
+bool Estimator::referenceUsable(const RefFrame& reference) const
+{
+    return reference.valid && reference.points3d.size() >= kMinCorrespondences;
+}
+
+Estimator::PnPResult Estimator::solvePnPFromReference(const RefFrame& reference)
+{
+    PnPResult result;
+    if (!referenceUsable(reference))
     {
-        frame_ = frame;
-        first_frame_ = false;
-        return true;
+        result.failure_reason = "reference_unusable"
+        return result;
     }
 
-    tracker_.detect_klt(frame_, frame);
-
-    // 3D-2D correspondences.
-    tracker_.get3d2d(frame_, pts3d_last_, pts2d_curr_);
-    if (pts3d_last_.size() < kMinCorrespondences)
+    tracker_.get3d2dFromReference(reference.points3d, pts3d_reference_, pts2d_current_);
+    result.matches = static_cast<int>(pts3d_reference_.size());
+    if (pts3d_reference_.size() < kMinCorrespondences)
     {
-        KR_WARN(
-            "Not enough 3D-2D correspondences: {} < {}",
-            pts3d_last_.size(), kMinCorrespondences);
-        frame_ = frame;
-        return false;
+        return result;
     }
 
-    
     cv::Mat dist = cv::Mat::zeros(5, 1, CV_64F);
     cv::Mat rvec;
     cv::Mat tvec;
     cv::Mat inliers;
-
+    
     const bool success = cv::solvePnPRansac(
-        pts3d_last_,
-        pts2d_curr_,
+        pts3d_reference_,
+        pts2d_current_,
         g_K,
         dist,
         rvec,
         tvec,
         false,
-        100,      // iterationsCount
-        3.0,      // reprojectionError
-        0.99,     // confidence
+        100,
+        3.0,
+        0.99,
         inliers,
         cv::SOLVEPNP_ITERATIVE);
+    
+    result.inliers = inliers.rows;
+    result.inlier_ratio = result.matches > 0 ? static_cast<double>(result.inliers) / result.matches : 0.0;
 
-    const int match_count = static_cast<int>(pts3d_last_.size());
-    const int inlier_count = inliers.rows;
-    const double inlier_ratio = match_count > 0
-        ? static_cast<double>(inlier_count) / match_count
-        : 0.0;
-
-    if (!success || inlier_count < kMinInliers ||
-        inlier_ratio < kMinInlierRatio)
+    if (!success || result.inliers < kMinInliers || result.inlier_ratio < kMinInlierRatio)
     {
-        KR_WARN(
-            "Rejecting PnP: success={} matches={} inliers={} ratio={:.3f}",
-            success, match_count, inlier_count, inlier_ratio);
-        frame_ = frame;
-        return false;
+        return result;
     }
 
-    const double median_reprojection_error = medianReprojectionError(
-        pts3d_last_, pts2d_curr_, inliers, rvec, tvec,
-        g_K, dist);
-    if (!std::isfinite(median_reprojection_error) ||
-        median_reprojection_error > kMaxMedianReprojectionError)
+    result.med_reprojection_error = medianReprojectionError(pts3d_reference_, pts2d_current_, inliers, rvec, tvec, g_K, dist);
+    if (!std::isfinite(result.med_reprojection_error) || result.med_reprojection_error > kMaxMedianReprojectionError)
     {
-        KR_WARN(
-            "Rejecting PnP: median reprojection error={:.3f}px",
-            median_reprojection_error);
-        frame_ = frame;
-        return false;
+        return result;
     }
 
     cv::Mat R_cv;
@@ -278,36 +263,357 @@ bool Estimator::solveFrame(
     }
 
     const Eigen::Vector3d t(
-        tvec.at<double>(0), tvec.at<double>(1),
+        tvec.at<double>(0),
+        tvec.at<double>(1),
         tvec.at<double>(2));
-    Eigen::Isometry3d T_last_curr = Eigen::Isometry3d::Identity();
-    T_last_curr.linear() = R.transpose();
-    T_last_curr.translation() = -R.transpose() * t;
 
-    const double translation_norm = T_last_curr.translation().norm();
-    const double rotation_angle = Eigen::AngleAxisd(
-        T_last_curr.rotation()).angle();
-    if (!T_last_curr.matrix().allFinite() ||
-        translation_norm > kMaxTranslationPerFrame ||
-        rotation_angle > kMaxRotationRadians)
+    result.T_ref_curr = Eigen::Isometry3d::Identity();
+    result.T_ref_curr.linear() = R.transpose();
+    result.T_ref_curr.translation() = -R.transpose() * t;
+
+    if (!result.T_ref_curr.matrix().allFinite())
     {
-        KR_WARN(
-            "Rejecting PnP motion: translation={:.3f}m rotation={:.3f}deg",
-            translation_norm, rotation_angle * 180.0 / CV_PI);
-        frame_ = frame;
+        return result;
+    }
+
+    result.success = true;
+    return result;
+}
+
+/**
+ * @brief 判断当前候选位姿是否可信
+ *
+ * 将当前候选位姿与最近一次可信位姿进行比较，计算两者之间的相对平移和旋转。
+ * 如果平移距离或旋转角度超过允许阈值，则认为当前候选位姿存在异常跳变，
+ * 拒绝该位姿更新。
+ *
+ * 考虑到中间可能存在视觉位姿更新失败的情况，阈值会根据当前帧与最近一次
+ * 可信位姿之间的时间间隔进行动态放宽，避免多帧间隔导致正常运动被误判。
+ *
+ * @param candidate_pose     当前待验证的候选全局位姿
+ * @param current_timestamp  当前帧时间戳，单位为秒
+ *
+ * @return true  候选位姿满足运动约束，可以接受
+ * @return false 候选位姿存在非法值或运动跳变，不应更新当前位姿
+ */
+bool Estimator::validCandidatePose(const Eigen::Isometry3d& candidate_pose, double current_timestamp) const
+{
+    if (!candidate_pose.matrix().allFinite())
+    {
         return false;
     }
 
-    pose_ = pose_ * T_last_curr;
-    KR_INFO(
-        "Visual update: matches={} inliers={} ratio={:.3f} "
-        "reprojection={:.3f}px translation={:.3f}m rotation={:.3f}deg",
-        match_count, inlier_count, inlier_ratio,
-        median_reprojection_error, translation_norm,
-        rotation_angle * 180.0 / CV_PI);
+    if (!last_pose_reference_.valid)
+    {
+        return true;
+    }
 
-    frame_ = frame;
+    const Eigen::Isometry3d delta = last_pose_reference_.pose.inverse() * candidate_pose;
+    const double translation = delta.translation().norm();
+    const double rotation = Eigen::AngleAxisd(delta.rotation()).angle();
 
+    // 当前阈值按照 10 Hz 的逐帧处理频率设置
+    // 当中间跳过了一帧或多帧视觉更新时，需要按时间间隔对阈值进行放宽。
+    constexpr double kNominalFramePeriodSeconds = 0.1;
+    const double dt = std::max(current_timestamp - last_pose_reference_.frame.timestamp, kNominalFramePeriodSeconds);
+    const double scale = std::max(1.0, dt / kNominalFramePeriodSeconds);
+
+    const double max_translation = kMaxTranslationPerFrame * scale;
+    const double max_rotation = kMaxRotationRadians * scale;
+
+    if (translation > max_translation || rotation > max_rotation)
+    {
+        KR_WARN("Rejecting candidate pose: dt={:.3f}s " "translation={:.3f}/{:.3f}m " "rotation={:.3f}/{:.3f}deg",
+            dt, translation, max_translation, rotation * 180.0 / CV_PI, max_rotation * 180.0 / CV_PI);
+        return false;
+    }
+    return true;
+
+}
+
+/**
+ * @brief 计算当前帧相对于关键帧的特征点中值视差
+ *
+ * 根据持续跟踪的特征点 ID，在当前帧和关键帧之间查找公共特征，
+ * 计算每个公共特征在两帧中的像素位移，并取所有有效视差的中值，
+ * 用于判断当前帧与关键帧之间的视觉变化程度。
+ *
+ * 同时通过 common_feature_count 返回当前帧与关键帧之间的公共特征数量。
+ *
+ * @param common_feature_count 当前帧与关键帧之间的公共有效特征数量
+ * @return 中值视差，单位为像素；无有效公共特征时返回 0.0
+ */
+double Estimator::calculateParallax(std::size_t& common_feature_count) const
+{
+    common_feature_count = 0;
+    if (!keyframe_reference_.valid || keyframe_reference_.pixels.empty())
+    {
+        return 0.0;
+    }
+    //当前帧中仍处于有效跟踪状态的特征点 ID
+    const auto& ids = tracker_.activeIds();
+    //与上述特征点 ID 一一对应的当前帧像素坐标
+    const auto& points = tracker_.activePoints();
+    if (ids.size() != points.size())
+    {
+        return 0.0;
+    }
+
+    //通过特征点的视差中位数来判断
+    std::vector<double> parallaxes;
+    parallaxes.reserve(points.size());
+
+    for (std::size_t i = 0; i < ids.size(); ++i)
+    {
+        const auto it = keyframe_reference_.pixels.find(ids[i]);
+        if (it == keyframe_reference_.pixels.end())
+        {
+            continue;
+        }
+
+        const double parallax = cv::norm(points[i] - it->second);
+        if (!std::isfinite(parallax))
+        {
+            continue;
+        }
+
+        parallaxes.push_back(parallax);
+    } 
+
+    common_feature_count = parallaxes.size();
+    if (parallaxes.empty())
+    {
+        return 0.0;
+    }
+
+    const auto middle = parallaxes.begin() + parallaxes.size() / 2;
+    std::nth_element(parallaxes.begin(), middle, parallaxes.end());
+    
+    return *middle;
+}
+
+/**
+ * @brief 判断当前帧是否需要创建为新的关键帧
+ *
+ * 根据当前关键帧状态、关键帧 PnP 是否成功、当前帧相对关键帧的中值视差、
+ * 公共特征数量以及距离上一关键帧的帧数，综合判断是否需要更新关键帧。
+ *
+ * 触发新关键帧的条件包括：
+ * 1. 当前还没有有效关键帧；
+ * 2. 当前关键帧 PnP 失败，但 last-pose fallback PnP 成功；
+ * 3. 当前帧相对关键帧的中值视差超过阈值；
+ * 4. 当前帧与关键帧之间的公共特征数量过少；
+ * 5. 距离上一关键帧的帧数达到最大允许间隔。
+ *
+ * @param median_parallax 当前帧相对于关键帧的中值视差，单位为像素
+ * @param common_feature_count 当前帧与关键帧之间的公共特征数量
+ * @param keyframe_pnp_success 当前帧使用关键帧作为参考进行 PnP 是否成功
+ *
+ * @return true  当前帧应该创建为新的关键帧
+ * @return false 继续使用当前关键帧
+ */
+bool Estimator::isKeyFrame(double median_parallax, std::size_t common_feature_count, bool keyframe_pnp_success) const
+{
+    // 当前还没有有效关键帧时，当前帧直接作为新的关键帧
+    if (!keyframe_reference_.valid)
+    {
+        return true;
+    }
+
+    // 当前关键帧已经无法稳定完成 PnP，
+    // 但 last-pose fallback 能够恢复当前位姿时，
+    // 说明原关键帧已经不适合作为后续参考，需要及时刷新关键帧。
+    if (!keyframe_pnp_success)
+    {
+        return true;
+    }
+
+    // 当前帧相对于关键帧的视差已经足够大，
+    // 说明两帧之间已经产生明显运动，需要建立新的关键帧。
+    if (median_parallax >= kKeyframeParallaxPixels)
+    {
+        return true;
+    }
+
+    // 当前帧与关键帧之间仍然能够持续跟踪的公共特征过少，
+    // 说明两帧的共视关系正在变差，需要更新关键帧。
+    if (common_feature_count < kMinKeyframeCommonFeatures)
+    {
+        return true;
+    }
+
+    // 即使运动较小、公共特征仍然充足，
+    // 也不能长期不更新关键帧，因此达到最大帧间隔后强制创建新关键帧。
+    return frames_since_keyframe_ >= kMaxFramesBetweenKeyframes;
+}
+
+bool Estimator::solveFrame(
+    Frame& frame,
+    const std::vector<ImuData>& imu_samples)
+{
+    // The timestamp-aligned IMU segment is intentionally owned by Estimator.
+    // Preintegration/fusion can be added here without changing Plugin I/O.
+    (void)imu_samples;
+
+    if (first_frame_)
+    {
+        if (!tracker_.initialize(frame))
+        {
+            KR_WARN("Failed to initialize visual tracker");
+            return false;
+        }
+        pose_ = Eigen::Isometry3d::Identity();
+        last_frame_ = frame;
+        
+        updateReference(last_pose_reference_, frame, pose_);
+        updateReference(keyframe_reference_, frame, pose_);
+
+        frames_since_keyframe_ = 0;
+        consecutive_pnp_failures_ = 0;
+        first_frame_ = false;
+
+        KR_INFO("[Keyframe] Initialize id={} timestamp={:.6f} " "features={} depth_points={}",
+            keyframe_id_, frame.timestamp,
+            keyframe_reference_.pixels.size(), keyframe_reference_.points3d.size());
+        ++keyframe_id_;
+
+        return true; 
+    }
+
+    // 1. 状态按帧推进，保证KLT特征跟踪连续
+    tracker_.detect_klt(last_frame_, frame);
+    last_frame_ = frame;
+
+    if (tracker_.trackedFeatures().size() < kMinCorrespondences)
+    {
+        ++consecutive_pnp_failures_;
+        KR_WARN(
+            "[Tracking] Too few persistent tracks: {} < {}, "
+            "PnP failures={}",
+            tracker_.trackedFeatures().size(),
+            kMinCorrespondences,
+            consecutive_pnp_failures_);
+        return false;
+    }
+
+    bool pose_valid = false;
+    bool keyframe_pnp_success = false;
+    const char* pnp_source = "none";
+    PnPResult accepted_result;
+    Eigen::Isometry3d candidate_pose = pose_;
+
+    // Primary: keyframe -> current.
+    if (referenceUsable(keyframe_reference_))
+    {
+        PnPResult result = solvePnPFromReference(keyframe_reference_);
+        if (result.success)
+        {
+            const Eigen::Isometry3d candidate =
+                keyframe_reference_.pose * result.T_ref_curr;
+
+            if (validCandidatePose(candidate, frame.timestamp))
+            {
+                candidate_pose = candidate;
+                accepted_result = result;
+                pose_valid = true;
+                keyframe_pnp_success = true;
+                pnp_source = "keyframe";
+            }
+        }
+    }
+
+    // Fallback: latest trusted pose frame -> current.
+    const bool same_reference =
+        keyframe_reference_.valid && last_pose_reference_.valid &&
+        std::abs(
+            keyframe_reference_.frame.timestamp -
+            last_pose_reference_.frame.timestamp) < 1e-9;
+
+    if (!pose_valid &&
+        referenceUsable(last_pose_reference_) &&
+        !same_reference)
+    {
+        PnPResult result = solvePnPFromReference(last_pose_reference_);
+        if (result.success)
+        {
+            const Eigen::Isometry3d candidate =
+                last_pose_reference_.pose * result.T_ref_curr;
+
+            if (validCandidatePose(candidate, frame.timestamp))
+            {
+                candidate_pose = candidate;
+                accepted_result = result;
+                pose_valid = true;
+                pnp_source = "last_pose";
+            }
+        }
+    }
+
+    if (!pose_valid)
+    {
+        ++consecutive_pnp_failures_;
+        KR_WARN("[PnP] Failed: keyframe_ref={} last_pose_ref={} " "tracked={} consecutive={}",
+            keyframe_reference_.points3d.size(), last_pose_reference_.points3d.size(),
+            tracker_.trackedFeatures().size(), consecutive_pnp_failures_);
+        return false;
+    }
+
+    // Only a trusted PnP result may update the pose layer.
+    pose_ = candidate_pose;
+    consecutive_pnp_failures_ = 0;
+
+    updateReference(last_pose_reference_, frame, pose_);
+
+    ++frames_since_keyframe_;
+
+    std::size_t common_feature_count = 0;
+    const double median_parallax = calculateParallax(common_feature_count);
+
+    const bool is_keyframe = isKeyFrame(median_parallax, common_feature_count, keyframe_pnp_success);
+
+     KR_INFO(
+        "[Visual] source={} matches={} inliers={} ratio={:.3f} "
+        "reprojection={:.3f}px parallax={:.2f}px "
+        "keyframe_common={} keyframe={} position=[{:.3f},{:.3f},{:.3f}]",
+        pnp_source,
+        accepted_result.matches,
+        accepted_result.inliers,
+        accepted_result.inlier_ratio,
+        accepted_result.med_reprojection_error,
+        median_parallax,
+        common_feature_count,
+        is_keyframe,
+        pose_.translation().x(),
+        pose_.translation().y(),
+        pose_.translation().z());
+
+    if (is_keyframe)
+    {
+        RefFrame new_keyframe;
+        updateReference(new_keyframe, frame, pose_);
+ 
+        if (referenceUsable(new_keyframe))
+        {
+            keyframe_reference_ = std::move(new_keyframe);
+            frames_since_keyframe_ = 0;
+
+            KR_INFO(
+                "[Keyframe] Create id={} timestamp={:.6f} "
+                "features={} depth_points={} source={}",
+                keyframe_id_,
+                frame.timestamp,
+                keyframe_reference_.pixels.size(),
+                keyframe_reference_.points3d.size(),
+                pnp_source);
+            ++keyframe_id_;
+        }
+        else
+        {
+            KR_WARN(
+                "[Keyframe] Candidate rejected: only {} valid depth points",
+                new_keyframe.points3d.size());
+        }
+    }
     return true;
 }
 
@@ -318,19 +624,26 @@ const Eigen::Isometry3d& Estimator::pose() const
 
 void Estimator::reset()
 {
-    tracker_ = FeatureTracker{};
-    frame_ = Frame{};
+    tracker_.reset();
+
+    last_frame_ = Frame{};
+    last_pose_reference_ = RefFrame{};
+    keyframe_reference_ = RefFrame{};
 
     pose_ = Eigen::Isometry3d::Identity();
     first_frame_ = true;
     imu_stream_seen_ = false;
     last_processed_frame_timestamp_ = -1.0;
+
+    frames_since_keyframe_ = 0;
+    keyframe_id_ = 0;
+    consecutive_pnp_failures_ = 0;
  
     frame_buf_.clear();
     imu_buf_.clear();
 
-    pts3d_last_.clear();
-    pts2d_curr_.clear();
+    pts3d_reference_.clear();
+    pts2d_current_.clear();
 
     
 }

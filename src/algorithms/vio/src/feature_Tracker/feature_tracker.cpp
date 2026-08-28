@@ -107,6 +107,24 @@ std::optional<double> queryRobustDepth(
 
 }  // namespace
 
+bool FeatureTracker::initialize(Frame& frame)
+{
+    cv::Mat gray;
+    if (!toGray(frame.rgb, gray))
+    {
+        KR_WARN("Cannot initialize tracker: invalid RGB frame");
+        return false;
+    }
+
+    pts_last_.clear();
+    pts_curr_.clear();
+    tracked_features_.clear();
+    initializeTracks(gray);
+
+    KR_INFO("Feature tracker initialized: active:{}",active_points_.size());
+    return !active_points_.empty();
+}
+
 bool FeatureTracker::toGray(const cv::Mat& image, cv::Mat& gray)
 {
     if (image.empty())
@@ -458,6 +476,67 @@ void FeatureTracker::get3d2d(
             static_cast<float>(point.y()),
             static_cast<float>(point.z()));
         pts2d_curr.push_back(pts_curr_[i]);
+    }
+}
+
+void FeatureTracker::buildReferenceData(
+    Frame& frame,
+    std::unordered_map<int, cv::Point3f>& points3d,
+    std::unordered_map<int, cv::Point2f>& pixels)
+{
+    points3d.clear();
+    pixels.clear();
+
+    if (active_points_.size() != active_ids_.size())
+    {
+        KR_WARN("Cannot build reference data: points={} ids={}", active_points_.size(), active_ids_.size());
+        return ;
+    }
+
+    for (std::size_t i = 0; i < active_points_.size(); ++i)
+    {
+        const int id = active_ids_[i];
+        const cv::Point2f& pixel = active_points_[i];
+
+        pixels[id] = pixel;
+        
+        const std::optional<double> depth = queryRobustDepth(frame.depth, pixel);
+        if (!depth)
+        {
+            continue;
+        }
+
+        const Eigen::Vector3d point = pointcloud_.pixel2camera(pixel.x, pixel.y, *depth);
+        points3d[id] = cv::Point3f(
+            static_cast<float>(point.x()),
+            static_cast<float>(point.y()),
+            static_cast<float>(point.z()));
+    }
+}
+
+void FeatureTracker::get3d2dFromReference(
+    const std::unordered_map<int, cv::Point3f>& reference_points3d, 
+    std::vector<cv::Point3f>& pts3d_reference,
+    std::vector<cv::Point2f>& pts2d_current) const
+{
+    pts3d_reference.clear();
+    pts2d_current.clear();
+
+    if (active_points_.size() != active_ids_.size())
+    {
+        return;
+    }
+
+    for (std::size_t i = 0; i < active_points_.size(); ++i)
+    {
+        const auto it = reference_points3d.find(active_ids_[i]);
+        if (it == reference_points3d.end())
+        {
+            continue;
+        }
+
+        pts3d_reference.push_back(it->second);
+        pts2d_current.push_back(active_points_[i]);
     }
 }
 
