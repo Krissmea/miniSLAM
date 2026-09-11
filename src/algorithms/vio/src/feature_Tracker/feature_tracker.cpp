@@ -368,6 +368,7 @@ void FeatureTracker::detect_klt(Frame& frame_last, Frame& frame_curr)
         active_points_.size() != active_ids_.size() ||
         active_points_.size() != active_track_counts_.size())
     {
+        //此步初始化之后，给被追踪到点分配ID，以及统计被追踪的次数
         initializeTracks(previous_gray);
     }
     if (active_points_.empty())
@@ -479,6 +480,26 @@ void FeatureTracker::get3d2d(
     }
 }
 
+/**
+ * @brief 构建当前帧的特征点参考数据
+ *
+ * 根据当前正在跟踪的特征点 active_points_ 及其对应 ID active_ids_，
+ * 构建特征点的二维像素坐标和三维空间坐标，用于后续参考帧匹配、
+ * PnP 位姿估计等处理。
+ *
+ * 对每个有效跟踪特征点：
+ * 1. 将其像素坐标保存到 pixels，建立 id -> 2D 像素坐标映射；
+ * 2. 在当前帧深度图中查询该像素位置的鲁棒深度；
+ * 3. 若深度有效，则通过相机模型将像素点反投影到相机坐标系，
+ *    并保存到 points3d，建立 id -> 3D 坐标映射。
+ *
+ * 若某个特征点无法获得有效深度，该特征点仍会保留在 pixels 中，
+ * 但不会加入 points3d。
+ *
+ * @param frame     当前帧数据，使用其中的深度图 frame.depth 获取特征点深度
+ * @param points3d  输出的特征点三维坐标，key 为特征点 ID，坐标位于相机坐标系
+ * @param pixels    输出的特征点二维像素坐标，key 为特征点 ID
+ */
 void FeatureTracker::buildReferenceData(
     Frame& frame,
     std::unordered_map<int, cv::Point3f>& points3d,
@@ -498,14 +519,14 @@ void FeatureTracker::buildReferenceData(
         const int id = active_ids_[i];
         const cv::Point2f& pixel = active_points_[i];
 
-        pixels[id] = pixel;
-        
         const std::optional<double> depth = queryRobustDepth(frame.depth, pixel);
         if (!depth)
         {
             continue;
         }
 
+        pixels[id] = pixel;
+        
         const Eigen::Vector3d point = pointcloud_.pixel2camera(pixel.x, pixel.y, *depth);
         points3d[id] = cv::Point3f(
             static_cast<float>(point.x()),

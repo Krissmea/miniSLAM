@@ -46,10 +46,7 @@ public:
 
     const std::vector<cv::Point2f>& ptsLast() const { return pts_last_; }
     const std::vector<cv::Point2f>& ptsCurr() const { return pts_curr_; }
-    const std::vector<TrackedFeature>& trackedFeatures() const
-    {
-        return tracked_features_;
-    }
+    const std::vector<TrackedFeature>& trackedFeatures() const { return tracked_features_; }
 
 private:
     static constexpr int kMaxFeatures = 200;                        //最多追踪点数

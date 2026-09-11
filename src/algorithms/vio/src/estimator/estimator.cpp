@@ -201,12 +201,14 @@ bool Estimator::referenceUsable(const RefFrame& reference) const
     return reference.valid && reference.points3d.size() >= kMinCorrespondences;
 }
 
+
+//求当前相机相对于 reference 的位姿，这个reference可能是上一有效位姿帧，也可能是关键帧
 Estimator::PnPResult Estimator::solvePnPFromReference(const RefFrame& reference)
 {
     PnPResult result;
     if (!referenceUsable(reference))
     {
-        result.failure_reason = "reference_unusable"
+        result.failure_reason = "reference_unusable";
         return result;
     }
 
@@ -503,6 +505,7 @@ bool Estimator::solveFrame(
     Eigen::Isometry3d candidate_pose = pose_;
 
     // Primary: keyframe -> current.
+    KR_WARN("referenceUsable(keyframe_reference_){}",referenceUsable(keyframe_reference_));
     if (referenceUsable(keyframe_reference_))
     {
         PnPResult result = solvePnPFromReference(keyframe_reference_);
@@ -571,7 +574,7 @@ bool Estimator::solveFrame(
 
     const bool is_keyframe = isKeyFrame(median_parallax, common_feature_count, keyframe_pnp_success);
 
-     KR_INFO(
+    KR_INFO(
         "[Visual] source={} matches={} inliers={} ratio={:.3f} "
         "reprojection={:.3f}px parallax={:.2f}px "
         "keyframe_common={} keyframe={} position=[{:.3f},{:.3f},{:.3f}]",

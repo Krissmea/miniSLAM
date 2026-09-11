@@ -36,6 +36,7 @@ public:
 
 private:
     //参考帧 reference参考
+    //参考帧可能来自关键帧或者上一有效位姿的帧，主要用于PnP求解当前帧位姿
     struct RefFrame
     {
         Frame frame;
