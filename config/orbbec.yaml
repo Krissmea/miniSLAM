@@ -1,0 +1,69 @@
+%YAML:1.0
+
+common_config: "common.yaml"
+
+# Change only this value to select the RGB-D or stereo input pipeline.
+input:
+  mode: "stereo"
+  rgb_topic: "/camera/color/image_raw"
+  depth_topic: "/camera/depth/image_raw"
+  left_topic: "/camera/left_ir/image_raw"
+  right_topic: "/camera/right_ir/image_raw"
+  imu_topic: "/camera/gyro_accel/sample"
+
+camera:
+  fx: 693.95899035228342
+  fy: 694.30500777100599
+  cx: 648.3654788865731
+  cy: 357.92069403110941
+  depth_scale: 1000.0
+
+# p_rgb = T_rgb_imu * p_imu
+extrinsic:
+  rgb_frame: "camera_color_optical_frame"
+  imu_frame: "camera_accel_gyro_optical_frame"
+  T_rgb_imu: !!opencv-matrix
+    rows: 4
+    cols: 4
+    dt: d
+    data:
+      [
+        0.99995128921366339, 0.0075945186748300995, -0.0063041641817640458, -0.017314050635227091,
+        -0.0075579915341304552, 0.99995462969857618, 0.0057978710190768716, 0.0077346371955832076,
+        0.0063479101996635288, -0.0057499417807049119, 0.9999633204301126, -0.026625606727384503,
+        0.0, 0.0, 0.0, 1.0
+      ]
+
+stereo:
+  image_width: 848
+  image_height: 480
+  left_K: !!opencv-matrix
+    rows: 3
+    cols: 3
+    dt: d
+    data: [410.6303340966623, 0.0, 423.32374091245794, 0.0, 410.64325293240648, 238.42411284081635, 0.0, 0.0, 1.0]
+  left_D: !!opencv-matrix
+    rows: 1
+    cols: 4
+    dt: d
+    data: [-0.0002129777184654514, -0.00027262362585327057, 0.0003899815378657982, 0.00015452048932139986]
+  right_K: !!opencv-matrix
+    rows: 3
+    cols: 3
+    dt: d
+    data: [410.40085149894031, 0.0, 423.18831435338586, 0.0, 410.3832074482325, 238.69986309205319, 0.0, 0.0, 1.0]
+  right_D: !!opencv-matrix
+    rows: 1
+    cols: 4
+    dt: d
+    data: [-0.00059064698603296243, 0.0005857393774332814, 0.00017704834137989876, 7.1619875603022928e-05]
+  R_right_left: !!opencv-matrix
+    rows: 3
+    cols: 3
+    dt: d
+    data: [0.99999996019943571, -7.804436829568609e-05, 0.00027112765097834639, 7.8075574626412005e-05, 0.99999999032929188, -0.00011508961887762189, -0.00027111866625974739, 0.00011511078274413738, 0.99999995662208707]
+  t_right_left: !!opencv-matrix
+    rows: 3
+    cols: 1
+    dt: d
+    data: [-0.050032561621697787, -2.2189466378259492e-05, -6.919189396818669e-05]

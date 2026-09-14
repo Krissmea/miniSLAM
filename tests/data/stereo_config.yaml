@@ -1,0 +1,50 @@
+%YAML:1.0
+
+common_config: "../../config/common.yaml"
+
+input:
+  mode: "stereo"
+  left_topic: "/camera/left_ir/image_raw"
+  right_topic: "/camera/right_ir/image_raw"
+  imu_topic: "/camera/gyro_accel/sample"
+
+camera:
+  fx: 500.0
+  fy: 500.0
+  cx: 320.0
+  cy: 240.0
+  depth_scale: 1000.0
+
+stereo:
+  image_width: 848
+  image_height: 480
+  left_K: !!opencv-matrix
+    rows: 3
+    cols: 3
+    dt: d
+    data: [410.6303340966623, 0.0, 423.32374091245794, 0.0, 410.64325293240648, 238.42411284081635, 0.0, 0.0, 1.0]
+  left_D: !!opencv-matrix
+    rows: 1
+    cols: 4
+    dt: d
+    data: [-0.0002129777184654514, -0.00027262362585327057, 0.0003899815378657982, 0.00015452048932139986]
+  right_K: !!opencv-matrix
+    rows: 3
+    cols: 3
+    dt: d
+    data: [410.40085149894031, 0.0, 423.18831435338586, 0.0, 410.3832074482325, 238.69986309205319, 0.0, 0.0, 1.0]
+  right_D: !!opencv-matrix
+    rows: 1
+    cols: 4
+    dt: d
+    data: [-0.00059064698603296243, 0.0005857393774332814, 0.00017704834137989876, 7.1619875603022928e-05]
+  R_right_left: !!opencv-matrix
+    rows: 3
+    cols: 3
+    dt: d
+    data: [0.99999996019943571, -7.804436829568609e-05, 0.00027112765097834639, 7.8075574626412005e-05, 0.99999999032929188, -0.00011508961887762189, -0.00027111866625974739, 0.00011511078274413738, 0.99999995662208707]
+  t_right_left: !!opencv-matrix
+    rows: 3
+    cols: 1
+    dt: d
+    data: [-0.050032561621697787, -2.2189466378259492e-05, -6.919189396818669e-05]

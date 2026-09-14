@@ -1,6 +1,7 @@
 #include "dataset.hpp"
 #include "vio_plugin.hpp"
 #include "pose.hpp"
+#include "config.hpp"
 #include <common/image_data.hpp>
 #include <common/posedata.hpp>
 #include <krisea_log/logger.hpp>
@@ -84,6 +85,9 @@ int main(int argc, char** argv)
        vio.process();
    }
 
-    pose_viewer.pathShow();
+    if (SHOW_TRAJECTORY)
+    {
+        pose_viewer.pathShow();
+    }
     return 0;
 }

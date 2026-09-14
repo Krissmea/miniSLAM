@@ -33,8 +33,17 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    mini_slam::RosAdapter adapter(*node);
+    mini_slam::RosAdapter adapter(
+        *node, stereoInputEnabled(), g_rgb_topic, g_depth_topic,
+        g_left_topic, g_right_topic, g_imu_topic);
     VioPlugin vio;
+    if (!vio.ready())
+    {
+        KR_CRITICAL("Failed to initialize VioPlugin for mode={}",
+            g_input_mode);
+        rclcpp::shutdown();
+        return 1;
+    }
 
     vio.setPoseCallback(
         [&adapter, &world_frame](const PoseData& estimated_pose) {
@@ -43,14 +52,28 @@ int main(int argc, char** argv)
           adapter.publishPose(output_pose);
         });
     
-    adapter.setRgbCallback([&vio](ImageData rgb) {
-        vio.inputImage(std::move(rgb));
-        vio.process();
-    });
-    adapter.setDepthCallback([&vio](DepthImageData depth) {
-        vio.inputDepth(std::move(depth));
-        vio.process();
-    });
+    if (stereoInputEnabled())
+    {
+        adapter.setLeftCallback([&vio](ImageData left) {
+            vio.inputLeftImage(std::move(left));
+            vio.process();
+        });
+        adapter.setRightCallback([&vio](ImageData right) {
+            vio.inputRightImage(std::move(right));
+            vio.process();
+        });
+    }
+    else
+    {
+        adapter.setRgbCallback([&vio](ImageData rgb) {
+            vio.inputImage(std::move(rgb));
+            vio.process();
+        });
+        adapter.setDepthCallback([&vio](DepthImageData depth) {
+            vio.inputDepth(std::move(depth));
+            vio.process();
+        });
+    }
     adapter.setImuCallback([&vio](ImuData imu) {
         vio.inputImu(std::move(imu));
         vio.process();

@@ -30,6 +30,9 @@ add_library(
     # feature tracker
     ${MINI_SLAM_VIO_DIR}/src/feature_Tracker/feature_tracker.cpp
 
+    # stereo depth generation
+    ${MINI_SLAM_VIO_DIR}/src/stereo/stereo_depth.cpp
+
     # initial
 
     # utility
@@ -67,6 +70,20 @@ target_link_libraries(
 )
 
 target_compile_features(mini_slam_vio PUBLIC cxx_std_20)
+
+if(BUILD_TESTING)
+    add_executable(
+        stereo_depth_setup_test
+        tests/stereo_depth_setup_test.cpp
+    )
+    target_compile_definitions(
+        stereo_depth_setup_test
+        PRIVATE
+            STEREO_TEST_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/tests/data/stereo_config.yaml"
+    )
+    target_link_libraries(stereo_depth_setup_test PRIVATE krisea::mini_slam_vio)
+    add_test(NAME stereo_depth_setup COMMAND stereo_depth_setup_test)
+endif()
 
 # =============================================================================
 # Offline dataset application
@@ -150,7 +167,7 @@ if(MINI_SLAM_BUILD_ROS2)
         target_compile_definitions(
             mini_slam_ros_node
             PRIVATE
-                MINI_SLAM_DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/orbbec_ros.yaml"
+                MINI_SLAM_DEFAULT_CONFIG_PATH="${CMAKE_CURRENT_SOURCE_DIR}/config/orbbec.yaml"
         )
 
         target_link_libraries(

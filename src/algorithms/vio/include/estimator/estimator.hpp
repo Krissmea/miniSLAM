@@ -68,6 +68,8 @@ private:
     bool validCandidatePose(const Eigen::Isometry3d& candidate_pose,  double current_timestamp) const;
     double calculateParallax(std::size_t& common_feature_count) const;
     bool isKeyFrame(double median_parallax, std::size_t common_feature_count, bool keyframe_pnp_success) const;
+    bool recoveryTrack(Frame& frame);
+    bool failureDetection(Frame& frame, const std::string& reason);
 
     FeatureTracker tracker_;
     // Layer 1: previous input frame. Used only for continuous KLT.

@@ -24,7 +24,7 @@ constexpr double kMaxRotationRadians = 20.0 * CV_PI / 180.0;
 constexpr int kMaxFramesBetweenKeyframes = 10;
 constexpr double kKeyframeParallaxPixels = 15.0;
 constexpr std::size_t kMinKeyframeCommonFeatures = 60;
-constexpr int kMaxFramesBetweenKeyFrames = 10;
+constexpr int kMaxConsecutivePnpFailures = 3;
 
 template <typename T>
 void insertByTimestamp(std::deque<T>& buffer, T data)
@@ -216,6 +216,7 @@ Estimator::PnPResult Estimator::solvePnPFromReference(const RefFrame& reference)
     result.matches = static_cast<int>(pts3d_reference_.size());
     if (pts3d_reference_.size() < kMinCorrespondences)
     {
+        result.failure_reason = "insufficient_matches";
         return result;
     }
 
@@ -241,14 +242,26 @@ Estimator::PnPResult Estimator::solvePnPFromReference(const RefFrame& reference)
     result.inliers = inliers.rows;
     result.inlier_ratio = result.matches > 0 ? static_cast<double>(result.inliers) / result.matches : 0.0;
 
-    if (!success || result.inliers < kMinInliers || result.inlier_ratio < kMinInlierRatio)
+    if (!success)
     {
+        result.failure_reason = "solvepnp_failed";
+        return result;
+    }
+    if (result.inliers < kMinInliers)
+    {
+        result.failure_reason = "insufficient_inliers";
+        return result;
+    }
+    if (result.inlier_ratio < kMinInlierRatio)
+    {
+        result.failure_reason = "low_inlier_ratio";
         return result;
     }
 
     result.med_reprojection_error = medianReprojectionError(pts3d_reference_, pts2d_current_, inliers, rvec, tvec, g_K, dist);
     if (!std::isfinite(result.med_reprojection_error) || result.med_reprojection_error > kMaxMedianReprojectionError)
     {
+        result.failure_reason = "high_reprojection_error";
         return result;
     }
 
@@ -275,10 +288,12 @@ Estimator::PnPResult Estimator::solvePnPFromReference(const RefFrame& reference)
 
     if (!result.T_ref_curr.matrix().allFinite())
     {
+        result.failure_reason = "non_finite_transform";
         return result;
     }
 
     result.success = true;
+    result.failure_reason = "none";
     return result;
 }
 
@@ -488,39 +503,38 @@ bool Estimator::solveFrame(
 
     if (tracker_.trackedFeatures().size() < kMinCorrespondences)
     {
-        ++consecutive_pnp_failures_;
-        KR_WARN(
-            "[Tracking] Too few persistent tracks: {} < {}, "
-            "PnP failures={}",
-            tracker_.trackedFeatures().size(),
-            kMinCorrespondences,
-            consecutive_pnp_failures_);
-        return false;
+        return failureDetection(frame, "insufficient_persistent_tracks");
     }
 
     bool pose_valid = false;
     bool keyframe_pnp_success = false;
     const char* pnp_source = "none";
     PnPResult accepted_result;
+    PnPResult keyframe_result;
+    PnPResult last_pose_result;
     Eigen::Isometry3d candidate_pose = pose_;
 
     // Primary: keyframe -> current.
-    KR_WARN("referenceUsable(keyframe_reference_){}",referenceUsable(keyframe_reference_));
+    KR_DEBUG("referenceUsable(keyframe_reference_){}",referenceUsable(keyframe_reference_));
     if (referenceUsable(keyframe_reference_))
     {
-        PnPResult result = solvePnPFromReference(keyframe_reference_);
-        if (result.success)
+        keyframe_result = solvePnPFromReference(keyframe_reference_);
+        if (keyframe_result.success)
         {
             const Eigen::Isometry3d candidate =
-                keyframe_reference_.pose * result.T_ref_curr;
+                keyframe_reference_.pose * keyframe_result.T_ref_curr;
 
             if (validCandidatePose(candidate, frame.timestamp))
             {
                 candidate_pose = candidate;
-                accepted_result = result;
+                accepted_result = keyframe_result;
                 pose_valid = true;
                 keyframe_pnp_success = true;
                 pnp_source = "keyframe";
+            }
+            else
+            {
+                keyframe_result.failure_reason = "motion_gate_rejected";
             }
         }
     }
@@ -536,29 +550,42 @@ bool Estimator::solveFrame(
         referenceUsable(last_pose_reference_) &&
         !same_reference)
     {
-        PnPResult result = solvePnPFromReference(last_pose_reference_);
-        if (result.success)
+        last_pose_result = solvePnPFromReference(last_pose_reference_);
+        if (last_pose_result.success)
         {
             const Eigen::Isometry3d candidate =
-                last_pose_reference_.pose * result.T_ref_curr;
+                last_pose_reference_.pose * last_pose_result.T_ref_curr;
 
             if (validCandidatePose(candidate, frame.timestamp))
             {
                 candidate_pose = candidate;
-                accepted_result = result;
+                accepted_result = last_pose_result;
                 pose_valid = true;
                 pnp_source = "last_pose";
+            }
+            else
+            {
+                last_pose_result.failure_reason = "motion_gate_rejected";
             }
         }
     }
 
     if (!pose_valid)
     {
-        ++consecutive_pnp_failures_;
-        KR_WARN("[PnP] Failed: keyframe_ref={} last_pose_ref={} " "tracked={} consecutive={}",
-            keyframe_reference_.points3d.size(), last_pose_reference_.points3d.size(),
-            tracker_.trackedFeatures().size(), consecutive_pnp_failures_);
-        return false;
+        KR_WARN(
+            "[PnP] Failed: frame={} "
+            "keyframe={{reason={},ref={},matches={},inliers={},ratio={:.3f},reprojection={:.3f}}} "
+            "last_pose={{reason={},ref={},matches={},inliers={},ratio={:.3f},reprojection={:.3f}}}",
+            frame.id,
+            keyframe_result.failure_reason,
+            keyframe_reference_.points3d.size(), keyframe_result.matches,
+            keyframe_result.inliers, keyframe_result.inlier_ratio,
+            keyframe_result.med_reprojection_error,
+            last_pose_result.failure_reason,
+            last_pose_reference_.points3d.size(), last_pose_result.matches,
+            last_pose_result.inliers, last_pose_result.inlier_ratio,
+            last_pose_result.med_reprojection_error);
+        return failureDetection(frame, "pnp_failed");
     }
 
     // Only a trusted PnP result may update the pose layer.
@@ -623,6 +650,61 @@ bool Estimator::solveFrame(
 const Eigen::Isometry3d& Estimator::pose() const
 {
     return pose_;
+}
+
+bool Estimator::recoveryTrack(Frame& frame)
+{
+    tracker_.reset();
+    if (!tracker_.initialize(frame))
+    {
+        KR_ERROR("[Recovery] 重新初始化失败");
+        return false;
+    }
+
+    //pose_ 保持最后一次可信位姿，不清零
+    last_frame_ = frame;
+    RefFrame new_reference;
+    updateReference(new_reference, frame, pose_);
+
+    if (!referenceUsable(new_reference))
+    {
+        KR_WARN("[Recovery] Insufficient depth points: {}", new_reference.points3d.size());
+        return false;
+    }
+
+    last_pose_reference_ = new_reference;
+    keyframe_reference_ = std::move(new_reference);
+
+    frames_since_keyframe_ = 0;
+    consecutive_pnp_failures_ = 0;
+
+    KR_WARN(
+        "[Recovery] Visual reference rebuilt: keyframe_id={} frame={} "
+        "timestamp={:.6f} features={} depth_points={} frozen_pose=[{:.3f},{:.3f},{:.3f}]",
+        keyframe_id_, frame.id, frame.timestamp,
+        keyframe_reference_.pixels.size(), keyframe_reference_.points3d.size(),
+        pose_.translation().x(), pose_.translation().y(), pose_.translation().z());
+    ++keyframe_id_;
+    return true;
+}
+
+bool Estimator::failureDetection(Frame& frame, const std::string& reason)
+{
+    ++consecutive_pnp_failures_;
+    KR_WARN(
+        "[TrackingFailure] frame={} reason={} tracked={} consecutive={}/{}",
+        frame.id, reason, tracker_.trackedFeatures().size(),
+        consecutive_pnp_failures_, kMaxConsecutivePnpFailures);
+
+    if (consecutive_pnp_failures_ >= kMaxConsecutivePnpFailures)
+    {
+        KR_WARN(
+            "[Recovery] Triggered at frame={} after {} consecutive failures",
+            frame.id, consecutive_pnp_failures_);
+        recoveryTrack(frame);
+    }
+
+    return false;
 }
 
 void Estimator::reset()

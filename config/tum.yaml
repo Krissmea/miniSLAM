@@ -1,6 +1,11 @@
 %YAML:1.0
 
+common_config: "common.yaml"
+
 # TUM RGB-D dataset: rgbd_dataset_freiburg1_xyz
+input:
+  mode: "rgbd"
+
 camera:
   fx: 517.3
   fy: 516.5
@@ -11,5 +16,3 @@ camera:
 dataset:
   type: tum
   path: ../../dataset/tum/rgbd_dataset_freiburg1_xyz
-
-SHOW_KLT_TRACKING: 1
