@@ -19,10 +19,7 @@
 
 namespace
 {
-
 constexpr int kDepthWindowRadius = 1;               //深度取值，某点周围深度的中位数
-constexpr double kMinDepthMeters = 0.2;             //最小距离
-constexpr double kMaxDepthMeters = 8.0;             //最大距离
 constexpr double kMaxDepthDeviationMeters = 0.2;    //邻域内最大距离与最小距离差值的阈值
 
 
@@ -80,8 +77,8 @@ std::optional<double> queryRobustDepth(
 
             const std::uint16_t raw = depth.at<std::uint16_t>(y, x);
             const double meters = static_cast<double>(raw) / g_depth_scale;
-            if (raw != 0 && meters >= kMinDepthMeters &&
-                meters <= kMaxDepthMeters)
+            if (raw != 0 && meters >= g_min_depth_meters &&
+                meters <= g_max_depth_meters)
             {
                 samples.push_back(meters);
             }

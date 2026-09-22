@@ -19,6 +19,7 @@ extern double g_rgbd_max_time_diff;
 extern double g_stereo_max_time_diff;
 extern double g_min_depth_meters;
 extern double g_max_depth_meters;
+extern double g_max_depth_deviation_meters;
 extern int g_sgbm_min_disparity;
 extern int g_sgbm_num_disparities;
 extern int g_sgbm_block_size;
